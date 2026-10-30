@@ -1,0 +1,19 @@
+{
+  "phase": "DEPENDENCIES_BUILT_INTEGRATION_PENDING",
+  "acceptedImage": "sha256:1aca12ae8c4937e2562c0b2331e628b3dc8316d5e494bbfa75e94d91dbaf2d53",
+  "coreImage": "sha256:1a5de6c2d6bac9e538adaecd68fd9fab375c64b9622745e9a8ca83c3941037bf",
+  "sessionImage": "sha256:c4cfcdf56e95654b64a1841ff43797a1b6a21202f27a5740c55edee9409071c1",
+  "evidence": "test/artifacts/xfce-eval/2026-10-28T15-30-24Z/footprint.json",
+  "liveRuntimeChanged": false,
+  "newDesktopRuntimeChecks": "UNTESTED",
+  "apiViewerHomeSourceUnchangedVersusFrozenUx": {
+    "server.mjs": true,
+    "desktop-apps.mjs": true,
+    "viewer.js": true,
+    "cursor.mjs": true,
+    "public/index.html": true,
+    "public/home.html": true
+  },
+  "narrowSourceBackup": "test/artifacts/polish/narrow-source-paused-2026-10-28T15-30Z",
+  "report": "POLISH-EVALUATION.md"
+}

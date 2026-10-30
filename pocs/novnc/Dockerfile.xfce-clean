@@ -1,0 +1,29 @@
+# Fresh runtime evaluation, not a later-layer deletion of the old desktop.
+# The noVNC/x11vnc payload is copied from the preserved tested local image.
+FROM sidekicks-novnc:live-drag AS verified-transport
+FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
+ENV DEBIAN_FRONTEND=noninteractive DISPLAY=:99 PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl python3 python3-aiohttp python3-pil xvfb xdotool scrot \
+    chromium fonts-dejavu thunar xfwm4 xfce4-panel xfdesktop4 xfce4-settings \
+    xfce4-terminal xfce4-session wmctrl dbus-x11 x11-utils x11-xserver-utils \
+    libvncserver1 libvncclient1 libssl3 libxtst6 libxinerama1 libxrandr2 \
+    libxfixes3 libxdamage1 libxcomposite1 && rm -rf /var/lib/apt/lists/*
+COPY --from=verified-transport /usr/local/bin/x11vnc /usr/local/bin/x11vnc
+COPY --from=verified-transport /opt/novnc /opt/novnc
+COPY --from=verified-transport /x11vnc-source.sha256 /x11vnc-source.sha256
+COPY --from=verified-transport /novnc-source.sha256 /novnc-source.sha256
+RUN useradd -m -s /bin/bash -u 1000 desktop && mkdir -p /app /home/desktop/Sidekicks && chown -R desktop:desktop /app /home/desktop
+COPY . /app
+RUN sh /app/install-xfce-stage.sh && \
+    cp /app/README.md /home/desktop/Sidekicks/POC-Report.md && \
+    chown -R desktop:desktop /home/desktop && \
+    dpkg-query -W > /app/package-versions.txt && \
+    dpkg-query -W -f='${binary:Package}\t${Version}\t${Installed-Size}\n' > /app/package-footprint.tsv && \
+    ldd /usr/local/bin/x11vnc > /app/x11vnc-runtime-libraries.txt && \
+    ! grep -q 'not found' /app/x11vnc-runtime-libraries.txt
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 XCURSOR_THEME=Adwaita XCURSOR_SIZE=24 SIDEKICKS_DESKTOP_STACK=xfce
+USER desktop
+WORKDIR /app
+EXPOSE 6080 8080
+CMD ["/app/entrypoint-xfce.sh"]

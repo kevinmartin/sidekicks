@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="thunar" version="1.0">
+  <!-- Theme comes from the original shared Sidekicks GTK3 assets. -->
+  <property name="last-restore-tabs" type="bool" value="false"/>
+  <property name="misc-volume-management" type="bool" value="false"/>
+  <property name="misc-single-click" type="bool" value="false"/>
+  <property name="misc-open-new-window-as-tab" type="bool" value="false"/>
+</channel>

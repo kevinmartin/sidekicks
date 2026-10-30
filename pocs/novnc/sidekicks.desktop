@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Browser
+Comment=Open or restore the Sidekicks browser
+Exec=python3 /app/desktop-app.py browser %U
+Icon=/app/desktop-assets/icons/browser.png
+Terminal=false
+StartupWMClass=SidekicksBrowser
+MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
+Categories=Network;WebBrowser;

@@ -1,0 +1,6 @@
+*
+!Dockerfile
+!.cache/
+!.cache/neko-v3.2.0.tar.gz
+!artifacts/
+!artifacts/loopback-manager.go

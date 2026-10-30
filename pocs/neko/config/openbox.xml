@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <theme><name>Clearlooks</name><titleLayout>NLIMC</titleLayout><keepBorder>yes</keepBorder><font place="ActiveWindow"><name>DejaVu Sans</name><size>10</size><weight>Bold</weight></font></theme>
+  <desktops><number>1</number></desktops>
+  <focus><focusNew>yes</focusNew><followMouse>no</followMouse></focus>
+  <placement><policy>Smart</policy><center>yes</center></placement>
+  <resize><drawContents>yes</drawContents><popupShow>Nonpixel</popupShow></resize>
+  <keyboard>
+    <keybind key="W-Return"><action name="Execute"><command>/etc/sidekicks/terminal.sh</command></action></keybind>
+    <keybind key="W-b"><action name="Execute"><command>/etc/sidekicks/browser.sh</command></action></keybind>
+    <keybind key="W-e"><action name="Execute"><command>/etc/sidekicks/files.sh</command></action></keybind>
+    <keybind key="W-d"><action name="ToggleShowDesktop"/></keybind>
+    <keybind key="W-m"><action name="Iconify"/></keybind>
+    <keybind key="A-F4"><action name="Close"/></keybind>
+    <keybind key="A-Tab"><action name="NextWindow"/></keybind>
+    <keybind key="A-space"><action name="ShowMenu"><menu>client-menu</menu></action></keybind>
+  </keyboard>
+  <mouse>
+    <dragThreshold>3</dragThreshold><doubleClickTime>450</doubleClickTime>
+    <!-- No Root/Desktop ShowMenu binding: app context menus remain available. -->
+    <context name="Client"><mousebind button="Left Middle Right" action="Press"><action name="Focus"/><action name="Raise"/></mousebind></context>
+    <context name="Titlebar">
+      <mousebind button="Left" action="Press"><action name="Focus"/><action name="Raise"/></mousebind>
+      <mousebind button="Left" action="Drag"><action name="Move"/></mousebind>
+      <mousebind button="Left" action="DoubleClick"><action name="ToggleMaximize"/></mousebind>
+      <mousebind button="Right" action="Click"><action name="ShowMenu"><menu>client-menu</menu></action></mousebind>
+    </context>
+    <context name="Close"><mousebind button="Left" action="Click"><action name="Close"/></mousebind></context>
+    <context name="Iconify"><mousebind button="Left" action="Click"><action name="Iconify"/></mousebind></context>
+    <context name="Maximize"><mousebind button="Left" action="Click"><action name="ToggleMaximize"/></mousebind></context>
+    <context name="Icon"><mousebind button="Left" action="Press"><action name="ShowMenu"><menu>client-menu</menu></action></mousebind></context>
+    <context name="Top Bottom Left Right TLCorner TRCorner BLCorner BRCorner"><mousebind button="Left" action="Drag"><action name="Focus"/><action name="Raise"/><action name="Resize"/></mousebind></context>
+    <context name="Frame">
+      <mousebind button="A-Left" action="Drag"><action name="Focus"/><action name="Raise"/><action name="Move"/></mousebind>
+      <mousebind button="A-Right" action="Drag"><action name="Focus"/><action name="Raise"/><action name="Resize"/></mousebind>
+    </context>
+  </mouse>
+  <applications>
+    <application class="*" type="normal"><decor>yes</decor></application>
+    <application class="SidekicksBrowser"><position force="yes"><x>center</x><y>56</y></position><size><width>1120</width><height>552</height></size><maximized>no</maximized><fullscreen>no</fullscreen><decor>yes</decor></application>
+  </applications>
+</openbox_config>

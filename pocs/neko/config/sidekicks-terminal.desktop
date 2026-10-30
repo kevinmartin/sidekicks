@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Sidekicks Terminal
+Exec=/etc/sidekicks/terminal.sh
+Icon=/etc/sidekicks/terminal.png
+Terminal=false

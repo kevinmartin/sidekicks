@@ -1,0 +1,5 @@
+ARG UX_BASE=sidekicks-neko:microvm-ux-base
+ARG LOOPBACK_BASE=sidekicks-neko:microvm-loopback-pinned
+FROM ${LOOPBACK_BASE} AS loopback
+FROM ${UX_BASE}
+COPY --from=loopback /usr/bin/neko /usr/bin/neko

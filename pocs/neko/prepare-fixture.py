@@ -1,0 +1,7 @@
+from pathlib import Path
+p=Path(__file__).with_name('fixture.html')
+s=p.read_text()
+script='''<script>
+(()=>{const marker=document.createElement('div');marker.id='frame-marker';marker.style='position:fixed;right:0;bottom:0;width:86px;height:42px;z-index:99999;color:white;font:bold 13px monospace;text-align:center;padding-top:12px;pointer-events:none';document.body.append(marker);const instance=crypto.randomUUID().slice(0,8);const pointerEvents=[];document.addEventListener('pointerdown',e=>{pointerEvents.push({x:e.clientX,y:e.clientY,button:e.button,trusted:e.isTrusted,at:performance.now()});if(pointerEvents.length>40)pointerEvents.shift();});let count=-1;setInterval(()=>{if(!window.__sidekicksFixture)return;const snapshot=window.__sidekicksFixture.snapshot();const n=snapshot.counts.click;marker.textContent=instance+' / '+n;marker.style.background=n%2?'rgb(240,80,20)':'rgb(20,90,240)';snapshot.events=snapshot.events.slice(-150);snapshot.pointerEvents=[...pointerEvents];snapshot.marker={instance,count:n,color:n%2?[240,80,20]:[20,90,240]};snapshot.layout={};for(const id of ['typing','click-target','drag-token','drop-zone','scroll-box','gesture-pad','audio-test','frame-marker']){const r=document.getElementById(id).getBoundingClientRect();snapshot.layout[id]={x:r.x,y:r.y,width:r.width,height:r.height};}fetch('/fixture-state',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(snapshot)}).catch(()=>{});},50);})();
+</script>'''
+p.write_text(s.replace('</body>',script+'</body>'))

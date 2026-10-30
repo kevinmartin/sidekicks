@@ -1,0 +1,170 @@
+{
+  "at": "2026-10-28T18:38:59.660561+00:00",
+  "phase": "V7_PRODUCTION_ACCEPTED_BOUNDED_FUNCTIONAL_THREE_NEKO_TARGETS",
+  "imageTag": "sidekicks-neko:polish-xfce-stage-v7",
+  "imageId": "sha256:36e11c585ece469a01f5bf705d5e1357afe767ba8e858eafba548d38786457a1",
+  "desktop": "Xfce 4.20 X11 / GTK3",
+  "nativeViewer": "http://127.0.0.1:7902/?mode=native",
+  "productionPromotion": "Integration completed Docker7902, canonical relay VM7906 and NAT VM7907; exact v7 source image with retained known loopback binary for VMs.",
+  "tests": {
+    "v5Gated": {
+      "PASS": 14,
+      "FAIL": 0
+    },
+    "v5Native": {
+      "PASS": 14,
+      "FAIL": 0
+    },
+    "v5HistoricalMenuAndRestart": {
+      "PASS": 5,
+      "FAIL": 0,
+      "logout": "previous immediate behavior, superseded by v6 confirmation"
+    },
+    "v6ConfirmationAndRestart": {
+      "PASS": 3,
+      "FAIL": 0
+    },
+    "localUnitAndFakeDockerLifecycle": {
+      "PASS": 19,
+      "FAIL": 0
+    },
+    "v7FocusedHomeAssociationAndRestart": {
+      "PASS": 7,
+      "FAIL": 0
+    },
+    "v6Independent": {
+      "PASS": 12,
+      "priorPASSReferences": 4,
+      "FAIL": 1,
+      "failure": "Home shortcut; preserved historical aggregate FAIL, corrected by v7 candidate"
+    },
+    "v7IndependentFocused": {
+      "PASS": 7,
+      "FAIL": 0,
+      "report": "artifacts/independent-qa/desktop-polish/stage-neko-2026-10-28T17-41-34-416Z/result.json",
+      "sha256": "61bd63413f2399cc02c4413c9a118980271c9d65c3f7c757cc9d66b16229558f",
+      "unaffectedV6ProofReferenced": true,
+      "fullV7AppSuiteRerunClaimed": false
+    },
+    "v7IndependentProduction": {
+      "docker-neko": {
+        "PASS": 10,
+        "FAIL": 0,
+        "report": "artifacts/independent-qa/desktop-polish/docker-neko-2026-10-28T17-58-54-842Z/result.json",
+        "sha256": "3074689543d27d8affa2c2e7f8b2572f399a8d1fa330bf1d8950b2e21a84891f",
+        "normalRestarts": 1,
+        "restartMethod": "normal Docker stop + supported pinned start.sh",
+        "owner": null,
+        "actualHeldKeys": [],
+        "actualHeldButtons": [],
+        "desktopReady": true,
+        "health": 200,
+        "home": {
+          "id": 18874371,
+          "pid": 79,
+          "title": "Sidekicks \u00b7 Home \u2014 Mozilla Firefox"
+        },
+        "containerId": "127b2d00b590d3a32f3d1563503a1269558fcaa37df0bace04b26c6134454ae3",
+        "image": "sha256:36e11c585ece469a01f5bf705d5e1357afe767ba8e858eafba548d38786457a1",
+        "viewer": "http://127.0.0.1:7902/"
+      },
+      "vm-neko": {
+        "PASS": 10,
+        "FAIL": 0,
+        "report": "artifacts/independent-qa/desktop-polish/vm-neko-2026-10-28T18-19-00-386Z/result.json",
+        "sha256": "027849c63489ef8fa6217aea1496b3d728e9afb58683242dc0e75a00473add36",
+        "normalRestarts": 1,
+        "restartMethod": "normal microvm.py stop(sync) + start same session disk",
+        "owner": null,
+        "actualHeldKeys": [],
+        "actualHeldButtons": [],
+        "desktopReady": true,
+        "health": 200,
+        "home": {
+          "id": 20971523,
+          "pid": 177,
+          "title": "Sidekicks \u00b7 Home \u2014 Mozilla Firefox"
+        },
+        "bootId": "47b7b666-dfd6-4e96-92d8-e5f49a5490b4",
+        "sourceImage": "sha256:36e11c585ece469a01f5bf705d5e1357afe767ba8e858eafba548d38786457a1",
+        "viewer": "http://127.0.0.1:7906/",
+        "networkMode": "none"
+      },
+      "vm-nat": {
+        "PASS": 10,
+        "FAIL": 0,
+        "report": "artifacts/independent-qa/desktop-polish/vm-nat-2026-10-28T18-20-48-344Z/result.json",
+        "sha256": "bad2a7dbc637d7ebc7e1a215ecee184b5a7d45f4e74704b733ff2a0405f0efd8",
+        "normalRestarts": 1,
+        "restartMethod": "normal microvm.py stop(sync) + start same session disk",
+        "owner": null,
+        "actualHeldKeys": [],
+        "actualHeldButtons": [],
+        "desktopReady": true,
+        "health": 200,
+        "home": {
+          "id": 20971523,
+          "pid": 192,
+          "title": "Sidekicks \u00b7 Home \u2014 Mozilla Firefox"
+        },
+        "bootId": "3b681b9c-cd3c-476b-b4e3-5c23611bbee3",
+        "sourceImage": "sha256:36e11c585ece469a01f5bf705d5e1357afe767ba8e858eafba548d38786457a1",
+        "viewer": "http://127.0.0.1:7907/",
+        "networkMode": "VZNATNetworkDeviceAttachment"
+      }
+    }
+  },
+  "confirmationReport": "test/artifacts/xfce-stage/confirmation-2026-10-28T16-50-22-723Z/report.json",
+  "handoff": "test/artifacts/xfce-stage/final-freeze-v7/handoff.json",
+  "documentation": "XFCE.md",
+  "bytes": 1558730439,
+  "netBytesVersus1aca": 91181958,
+  "untested": [
+    "physical Mac/mobile gestures",
+    "new Xfce performance and resource comparison",
+    "new Xfce audio measurement",
+    "WAN",
+    "online Help loading"
+  ],
+  "knownMenuFacts": [
+    "supported ordinary-user customization lock",
+    "stock Help/About/Log Out remain",
+    "v6 actual Cancel preserves open apps/session"
+  ],
+  "sourceHistory": "Failed passive guard and failed test attempts preserved; no runtime guard ships in v6 merged filesystem.",
+  "homeReport": "test/artifacts/xfce-stage/home-2026-10-28T17-20-24-568Z/report.json",
+  "v7Change": "Only Homepage.StartPage home to homepage, installed in actual Firefox policy path and source copy; no other policy/style/startup/AutoConfig change",
+  "stageRelease": "QA reports clean one Home, owner null, actual held input empty, no active verifier/browser; no subsequent worker runtime probe",
+  "viewer": "http://127.0.0.1:7902/",
+  "authoritativeDocumentation": "docs/desktop-polish.md",
+  "historicalStageViewer": "http://127.0.0.1:17802/",
+  "stageState": "STOPPED_RETAINED by integration after QA release; exact c42 stage container/image preserved and proxy49703 stopped.",
+  "productionContainer": {
+    "name": "sidekicks-neko",
+    "id": "127b2d00b590d3a32f3d1563503a1269558fcaa37df0bace04b26c6134454ae3",
+    "image": "sha256:36e11c585ece469a01f5bf705d5e1357afe767ba8e858eafba548d38786457a1"
+  },
+  "productionSummary": {
+    "path": "artifacts/independent-qa/desktop-polish/production-summary.json",
+    "sha256": "c04b89c6bfa6fc359a12dd6d9698a4d29ba936f25726317d519639803832da27",
+    "status": "PASS_BOUNDED_PRODUCTION_WITH_KNOWN_RESTART_UX_LIMITATION"
+  },
+  "finalProductionAudit": {
+    "path": "artifacts/independent-qa/desktop-polish/final-production-state.json",
+    "sha256": "4d520dc08ced0116ebcb5e7a2f3183dfb7704a10b98cb960d53f07d3c5f0b150",
+    "status": "PASS",
+    "observedAt": "2026-10-28T18:31:18.968Z",
+    "allFiveReadyUnownedAndHeldEmpty": true,
+    "privateLoopbackListeners": 11,
+    "existingIntentionalLANListeners": 5
+  },
+  "stageCleanup": "artifacts/desktop-polish/production/stage-cleanup.json",
+  "natLANReconciliation": {
+    "actualGuestIPv4": "192.168.64.4",
+    "bridgePid": 69880,
+    "bridgeNATTarget": "192.168.64.4",
+    "unchanged": true,
+    "scope": "Saved production QA evidence; no new network/runtime probe"
+  },
+  "closeoutScope": "Metadata/docs reconciliation only. No GUI/source/build/start/runtime/input calls or new tests. Original v6 Home FAIL/versioned evidence preserved."
+}

@@ -1,0 +1,11 @@
+[Default Applications]
+text/html=sidekicks-browser.desktop
+x-scheme-handler/http=sidekicks-browser.desktop
+x-scheme-handler/https=sidekicks-browser.desktop
+inode/directory=thunar.desktop
+
+[Added Associations]
+text/html=sidekicks-browser.desktop;
+x-scheme-handler/http=sidekicks-browser.desktop;
+x-scheme-handler/https=sidekicks-browser.desktop;
+inode/directory=thunar.desktop;

@@ -1,0 +1,188 @@
+{
+  "id": "neko",
+  "phase": "verified",
+  "summary": "Runnable native ARM64 Neko POC verified: real WebRTC, native/gated inputs, exact ASCII text, generic terminal takeover, clean restart, fresh captures, synthetic audio decode and30-sample native timing.",
+  "updatedAt": "2026-10-25T23:43:41.907316-04:00",
+  "viewerUrl": "http://127.0.0.1:7902/",
+  "nativeViewerUrl": "http://127.0.0.1:7902/?mode=native",
+  "adapterUrl": "http://127.0.0.1:7792",
+  "runtime": {
+    "platform": "linux/arm64",
+    "emulated": false,
+    "nekoSource": "3.2.0",
+    "sourceArchiveSha256": "3e8a3f7d7f19ed1097b0c28b985894df6c40769ceb6d65cfdffea844026f839d",
+    "cpuLimit": 2,
+    "memoryMiB": 2048,
+    "sharedMemoryMiB": 512,
+    "gpu": "not passed/not tested",
+    "bindings": "127.0.0.1 only; TCP7792/7902 UDP59020-59039",
+    "image": "sha256:a7120e76048242bacf22b36e3c916339f71ad82858e0ce69c53d2fe8611fec85",
+    "container": "8450dffcfe4b7cf58b0699c1c4806c14f8cad6f2466041dd68901c1178fb8293",
+    "finalFactsEvidence": "artifacts/independent-qa/runtime.json"
+  },
+  "capabilities": {
+    "keyboard": {
+      "status": "tested",
+      "detail": "Both viewer paths and normalized API preserve exact tested mixed-case ASCII/punctuation/LF string. Normalized text rejects unsupported Unicode422; native physical keys use explicit modifiers."
+    },
+    "click": {
+      "status": "tested",
+      "detail": "Both viewer routes and normalized automation, synthetic fixture."
+    },
+    "rightClick": {
+      "status": "tested",
+      "detail": "Both viewer routes and normalized input, real contextmenu event."
+    },
+    "doubleClick": {
+      "status": "tested",
+      "detail": "Both viewer routes, real dblclick event."
+    },
+    "drag": {
+      "status": "tested",
+      "detail": "Both routes from fresh fixture; pointer down/moves/up and real drop."
+    },
+    "scroll": {
+      "status": "tested",
+      "detail": "Both wheel axes independently tested on native and gated viewer paths. Wheel is emulated X11 scrolling; no native trackpad gesture proof."
+    },
+    "modifiers": {
+      "status": "tested",
+      "detail": "Control/Shift tested, held release on revoke, blur, disconnect, expiry and invalid batch."
+    },
+    "screenshot": {
+      "status": "tested",
+      "detail": "Real Neko X11 JPEG, 640x360 and1280x720, bounded resize/source mapping; image personally inspected."
+    },
+    "humanTakeover": {
+      "status": "tested",
+      "detail": "Both modes block stale/new bot sends, cancel queued producer and release held state. Native xterm exact command-output proof and stable controller-send count independently passed; already-delivered application events can settle after acknowledgment."
+    },
+    "pinchNative": {
+      "status": "unsupported",
+      "detail": "Custom Xorg native touch driver disabled in this configuration; physical Mac gesture untested."
+    },
+    "swipeNative": {
+      "status": "unsupported",
+      "detail": "No native touch driver; wheel/drag are emulated."
+    },
+    "zoomEmulated": {
+      "status": "implemented",
+      "detail": "Ctrl+wheel through Neko; explicit emulation, independent QA pending."
+    },
+    "audio": {
+      "status": "tested",
+      "detail": "Received synthetic250ms440Hz tone as decoded PCM; peak RMS0.04253. Silent baseline, zero-gain output; no microphone or physical listening.",
+      "evidence": "artifacts/independent-qa/neko-native-audio.json"
+    },
+    "theme": {
+      "status": "tested",
+      "detail": "Actual wallpaper, tint2 panel, launcher icons and toolbar-launched xterm; native generic command-output takeover independently passed. Clean restart/fresh fixture capture passed separately from preserved appearance-helper restoration failure."
+    }
+  },
+  "ownTests": {
+    "unit": {
+      "pass": 7,
+      "command": "node --test pocs/neko/test/lease.test.mjs",
+      "evidence": "artifacts/neko/unit-tests.tap"
+    },
+    "smoke": {
+      "status": "PASS",
+      "decoded": "1280x720 VP8, RTC data channel open",
+      "evidence": "artifacts/neko/smoke.json"
+    },
+    "e2e": {
+      "pass": 8,
+      "status": "PASS",
+      "evidence": "artifacts/neko/e2e.json"
+    },
+    "lifecycle": {
+      "pass": 4,
+      "overall": "Prior aggregate FAIL on terminal title assertion preserved; independent final clean restart and native terminal takeover passed separately.",
+      "evidence": "artifacts/neko/lifecycle.json"
+    },
+    "exactText": {
+      "roundtripPass": 3,
+      "unicodeRejected": 422,
+      "expected": "SideKicks QA! 123\\nspaces_+[]{} @# =:;?",
+      "aggregate": "Earlier aggregate FAIL was a nonessential mutable terminal title assertion; three exact text checks passed. Independent final actual terminal output/send-counter/held-release proof passed separately.",
+      "evidence": "artifacts/neko/text-contract.json"
+    }
+  },
+  "evidence": [
+    "artifacts/neko/viewer-smoke.png",
+    "artifacts/neko/gated-viewer.png",
+    "artifacts/neko/native-viewer.png",
+    "artifacts/neko/gated-fixture.json",
+    "artifacts/neko/native-fixture.json",
+    "artifacts/neko/llm-capture.jpg",
+    "artifacts/neko/linux-wallpaper-panel.jpg",
+    "artifacts/neko/runtime.json",
+    "artifacts/neko/image.json",
+    "artifacts/independent-qa/neko-native-measure.json",
+    "artifacts/independent-qa/neko-native-audio.json",
+    "artifacts/independent-qa/neko-restart.json",
+    "artifacts/independent-qa/neko-native-appearance.json"
+  ],
+  "limitations": [
+    "Already injected application input may render after ownership ACK; no generic application drain/rollback claim. Every future event/character checks lease generation, text paced4ms per character.",
+    "Physical Mac human/mobile input and native trackpad gestures untested.",
+    "No GPU claim; software VP8.",
+    "No model API calls; independent image verification only."
+  ],
+  "blockers": [],
+  "pending": [],
+  "independentQA": {
+    "activeContractPass": 16,
+    "nativeBasicPass": 15,
+    "gatedFunctionalPass": 13,
+    "gatedStrictApplicationDrainDiagnostic": "Observed one already-delivered text event1ms after ownership ACK; this is explicitly outside generic rollback guarantee. Timestamp resolution caveat.",
+    "paths": [
+      "artifacts/independent-qa/neko-contract-active.json",
+      "artifacts/independent-qa/neko-native-basic.json",
+      "artifacts/independent-qa/neko-viewer-basic.json"
+    ],
+    "nativeTerminalTakeover": {
+      "status": "PASS",
+      "evidence": "artifacts/independent-qa/neko-native-appearance.json",
+      "detail": "Exact unique lowercase printf output; controller frame counter stable after acknowledgment; real X11 held keys/buttons cleared. Wallpaper/panel personally inspected by independent QA."
+    },
+    "appearanceRestoration": {
+      "status": "FAIL",
+      "detail": "QA restoration helper selected wrong panel task and timed out waiting for fixture marker; preserved separately from passed native terminal takeover."
+    },
+    "restart": {
+      "status": "PASS",
+      "checks": 2,
+      "evidence": "artifacts/independent-qa/neko-restart.json"
+    },
+    "nativeTiming": {
+      "status": "PASS",
+      "n": 30,
+      "successes": 30,
+      "failures": 0,
+      "medianMs": 61.69999885559082,
+      "p95Ms": 96.20000076293945,
+      "maxMs": 96.89999961853027,
+      "samplingIntervalMs": {
+        "median": 16.600000381469727,
+        "p95": 16.80000114440918,
+        "max": 23.399999618530273
+      },
+      "method": "same viewer browser performance.now(): mousedown \u2192 first decoded standard fixture click-counter region change, polled by requestAnimationFrame",
+      "detector": "At least12 pixels differ by>45 in any RGB channel in the standard synchronous click-counter row. Supplemental marker update timers are excluded from latency.",
+      "evidence": "artifacts/independent-qa/neko-native-measure.json",
+      "caveat": "Sequential local synthetic headless browser run at1280x720/2CPUs/2GiB with builders idle; not physical human display latency or WAN benchmark."
+    }
+  },
+  "untested": [
+    "Physical human/mobile/trackpad hardware; native touch driver disabled.",
+    "QualityVP8encoder variant implemented but not measured/independently exercised.",
+    "Dedicated idle-versus-motion resource study not performed; only sanitized post-QA Docker snapshot exists.",
+    "General Unicode/IME/layout coverage; normalized text intentionally printableASCII/LF/Tab only.",
+    "WAN/network-loss/mobile-browser coverage and hardware GPU encoding."
+  ],
+  "resourceSnapshot": {
+    "evidence": "artifacts/independent-qa/runtime.json",
+    "observation": "One post-QA point sample: Docker CPU32.72% of one core;667.6MiB/2GiB memory. Not classified as idle or motion and not a controlled resource comparison."
+  }
+}

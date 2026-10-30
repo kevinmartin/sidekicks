@@ -1,0 +1,8 @@
+FROM sidekicks-novnc:polish-thunar-deps
+USER root
+COPY . /app
+RUN cp /app/openbox.xml /home/desktop/.config/openbox/rc.xml && \
+    cp /app/tint2rc /home/desktop/.config/tint2/tint2rc && \
+    chmod +x /app/entrypoint.sh && sh /app/install-polish-config.sh && \
+    dpkg-query -W > /app/package-versions.txt
+USER desktop

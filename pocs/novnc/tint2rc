@@ -1,0 +1,46 @@
+# Background 1: glass dock; alpha is composited by picom/Xrender.
+rounded = 24
+border_width = 1
+background_color = #e7f8ff 66
+border_color = #ffffff 65
+background_color_hover = #f4fbff 80
+background_color_pressed = #d5f1ff 85
+
+# Background 2: launcher/task hover targets.
+rounded = 14
+border_width = 0
+background_color = #ffffff 0
+background_color_hover = #ffffff 45
+background_color_pressed = #ffffff 70
+
+panel_items = L
+panel_size = 230 64
+panel_margin = 0 16
+panel_padding = 13 7 10
+panel_position = bottom center horizontal
+panel_background_id = 1
+panel_layer = top
+panel_dock = 0
+panel_shrink = 0
+strut_policy = follow_size
+wm_menu = 0
+autohide = 0
+mouse_effects = 1
+disable_transparency = 0
+tooltip = 1
+tooltip_show_timeout = 0.35
+tooltip_hide_timeout = 0.1
+tooltip_font = DejaVu Sans 10
+tooltip_font_color = #143047 100
+tooltip_background_id = 1
+
+launcher_padding = 4 0 8
+launcher_background_id = 0
+launcher_icon_background_id = 2
+launcher_icon_size = 42
+launcher_item_app = /app/sidekicks.desktop
+launcher_item_app = /app/terminal.desktop
+launcher_item_app = /app/files.desktop
+launcher_tooltip = 1
+launcher_icon_asb = 100 0 0
+

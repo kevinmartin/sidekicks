@@ -1,0 +1,12 @@
+[Icon Theme]
+Name=Sidekicks
+Comment=Original Sidekicks folder accents over installed Adwaita icons
+Inherits=Adwaita,hicolor
+Directories=scalable/places
+
+[scalable/places]
+Size=48
+MinSize=16
+MaxSize=256
+Type=Scalable
+Context=Places

@@ -1,0 +1,11 @@
+import {chromium} from 'playwright';
+const b=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+const p=await b.newPage({viewport:{width:1440,height:1040}});
+await p.goto('http://127.0.0.1:7901');await p.waitForFunction(()=>window.sidekicks?.connected);await p.evaluate(()=>sidekicks.take());
+await p.setViewportSize({width:1000,height:800});await p.waitForTimeout(600);
+const s=(await(await fetch('http://127.0.0.1:7901/fixture-events')).json()).at(-1),r=s.geometry.rects['click-target'],o=s.geometry.offset,pt={x:r.x+r.width/2+o.x,y:r.y+r.height/2+o.y};
+const c=await p.locator('#screen canvas').boundingBox(),xy={x:c.x+pt.x*c.width/1280,y:c.y+pt.y*c.height/720};
+console.log(JSON.stringify({s:s.geometry,pt,c,xy,ui:await p.evaluate(()=>({viewOnly:sidekicks.rfb.viewOnly,scale:sidekicks.rfb._display.scale,owner:document.querySelector('#mode').textContent})),control:await(await fetch('http://127.0.0.1:7901/control')).json()},null,2));
+await p.screenshot({path:'artifacts/novnc/resize-debug.png'});await p.mouse.click(xy.x,xy.y);await p.waitForTimeout(600);
+console.log(JSON.stringify((await(await fetch('http://127.0.0.1:7901/fixture-events')).json()).at(-1).snapshot.events.slice(-8),null,2));
+console.log(await(await fetch('http://127.0.0.1:7901/metrics')).text());await b.close();

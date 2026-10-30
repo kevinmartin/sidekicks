@@ -1,0 +1,61 @@
+# Translucent floating dock; picom provides XRender alpha.
+rounded = 23
+border_width = 1
+background_color = #eefaff 68
+border_color = #ffffff 65
+
+rounded = 12
+border_width = 0
+background_color = #ffffff 0
+
+rounded = 12
+border_width = 1
+background_color = #ffffff 65
+border_color = #ffffff 70
+
+panel_items = L
+panel_position = bottom center horizontal
+panel_size = 520 74
+panel_shrink = 1
+panel_margin = 0 16
+panel_padding = 12 8 12
+panel_layer = top
+# Ignore unhandled dock clicks instead of forwarding them to WM settings menus.
+wm_menu = 0
+panel_background_id = 1
+panel_window_name = Sidekicks Dock
+strut_policy = follow_size
+disable_transparency = 0
+mouse_effects = 1
+autohide = 0
+
+launcher_item_app = /home/neko/.local/share/applications/sidekicks-browser.desktop
+launcher_item_app = /home/neko/.local/share/applications/sidekicks-terminal.desktop
+launcher_item_app = /home/neko/.local/share/applications/sidekicks-files.desktop
+launcher_icon_size = 44
+launcher_padding = 4 0 9
+launcher_tooltip = 1
+
+taskbar_mode = single_desktop
+taskbar_padding = 8 0 5
+taskbar_hide_if_empty = 1
+taskbar_hide_inactive_tasks = 0
+taskbar_distribute_size = 0
+task_icon = 1
+task_text = 0
+task_tooltip = 1
+task_maximum_size = 48 48
+task_padding = 6 6 0
+task_background_id = 2
+task_active_background_id = 3
+task_iconified_background_id = 2
+task_iconified_icon_asb = 65 0 0
+mouse_left = toggle_iconify
+mouse_middle = none
+mouse_right = none
+mouse_scroll_up = toggle
+mouse_scroll_down = iconify
+tooltip_font = DejaVu Sans 10
+tooltip_font_color = #123b65 100
+tooltip_background_id = 3
+tooltip_padding = 10 6

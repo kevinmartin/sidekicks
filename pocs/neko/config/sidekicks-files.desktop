@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Files
+Exec=/etc/sidekicks/files.sh
+Icon=/etc/sidekicks/files.png
+Terminal=false

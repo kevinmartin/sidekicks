@@ -1,0 +1,21 @@
+FROM node:22-trixie-slim AS client
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY viewer.js cursor.mjs ./
+RUN mkdir public && npm run build
+
+# build-ux.sh guards this local tag's exact accepted image ID before/after.
+# Keep the accepted tag and all historical evidence intact.
+FROM sidekicks-neko:3.2.0-source
+RUN apt-get update && apt-get install -y --no-install-recommends picom pcmanfm thunar wmctrl x11-utils x11-xserver-utils xdg-utils adwaita-icon-theme librsvg2-common && rm -rf /var/lib/apt/lists/*
+COPY config /etc/sidekicks
+COPY config/firefox-policies.json /usr/lib/firefox-esr/distribution/policies.json
+COPY config/firefox-autoconfig.js /usr/lib/firefox-esr/defaults/pref/sidekicks-autoconfig.js
+COPY config/firefox-sidekicks.cfg /usr/lib/firefox-esr/sidekicks.cfg
+COPY server.mjs desktop-apps.mjs /app/
+COPY public/index.html public/home.html /app/public/
+COPY --from=client /app/public/viewer.js /app/public/viewer.js
+RUN cp /etc/sidekicks/openbox.xml /home/neko/.config/openbox/rc.xml && cp /etc/sidekicks/tint2rc /home/neko/.config/tint2/tint2rc && cp /etc/sidekicks/*.desktop /home/neko/.local/share/applications/ && rsvg-convert /etc/sidekicks/terminal.svg -o /etc/sidekicks/terminal.png && rsvg-convert /etc/sidekicks/browser.svg -o /etc/sidekicks/browser.png && rsvg-convert /etc/sidekicks/files.svg -o /etc/sidekicks/files.png && rsvg-convert -w 1280 -h 720 /etc/sidekicks/wallpaper.svg -o /etc/sidekicks/wallpaper.png && chmod +x /etc/sidekicks/*.sh && chown -R neko:neko /home/neko
+RUN /etc/sidekicks/install-desktop-defaults.sh
+ENV SIDEKICKS_DESKTOP_REVISION=sky-ux1

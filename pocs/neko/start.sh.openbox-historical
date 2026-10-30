@@ -1,0 +1,32 @@
+#!/bin/bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+IMAGE="${SIDEKICKS_NEKO_IMAGE:-sidekicks-neko:3.2.0-ux1}"
+mkdir -p "$HERE/.cache" "$ROOT/artifacts/neko"
+if [ ! -f "$HERE/.cache/neko-v3.2.0.tar.gz" ]; then
+  curl -fL --max-time 90 https://codeload.github.com/m1k1o/neko/tar.gz/refs/tags/v3.2.0 -o "$HERE/.cache/neko-v3.2.0.tar.gz"
+fi
+python3 - "$HERE/.cache/neko-v3.2.0.tar.gz" <<'PY'
+import hashlib,sys
+assert hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest()=='3e8a3f7d7f19ed1097b0c28b985894df6c40769ceb6d65cfdffea844026f839d', 'Neko source checksum mismatch'
+PY
+cp "$ROOT/shared/desktop-fixture.html" "$HERE/fixture.html"
+python3 "$HERE/prepare-fixture.py"
+if [ "${SIDEKICKS_NEKO_BUILD:-1}" != 0 ]; then bash "$HERE/build-ux.sh"; fi
+if docker container inspect sidekicks-neko >/dev/null 2>&1; then
+  if [ "$(docker inspect --format '{{index .Config.Labels "component"}}' sidekicks-neko)" != "neko" ]; then
+    printf 'Refusing to replace a container without the task-owned Neko label.\n' >&2
+    exit 1
+  fi
+  if [ "$(docker inspect --format '{{.Image}}' sidekicks-neko)" != "$(docker image inspect --format '{{.Id}}' "$IMAGE")" ]; then
+    docker stop -t 10 sidekicks-neko >/dev/null
+    docker rm sidekicks-neko >/dev/null
+  fi
+fi
+if docker container inspect sidekicks-neko >/dev/null 2>&1; then
+  docker start sidekicks-neko >/dev/null
+else
+  docker run -d --name sidekicks-neko --label app=sidekicks --label component=neko --platform linux/arm64 --cpus=2 --memory=2g --shm-size=512m --pids-limit=512 --security-opt=no-new-privileges:true -p 127.0.0.1:7792:7792 -p 127.0.0.1:7902:7902 -p 127.0.0.1:59020-59039:59020-59039/udp "$IMAGE"
+fi
+printf 'Neko viewer: http://127.0.0.1:7902/\nNative diagnostic: http://127.0.0.1:7902/?mode=native\nAdapter: http://127.0.0.1:7792/health\n'

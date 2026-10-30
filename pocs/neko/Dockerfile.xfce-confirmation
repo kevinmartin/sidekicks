@@ -1,0 +1,5 @@
+# Minimal confirmation revision over the exact tested pruned v5 image.
+FROM sidekicks-neko:polish-xfce-stage-v5
+COPY --chown=neko:neko config/xfce-session-confirmed.xml /home/neko/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml
+COPY config/polish/xfce/templates/xfce4-session.xml /etc/sidekicks/polish/xfce/templates/xfce4-session.xml
+RUN rm -rf /etc/sidekicks/polish/xfce/__pycache__

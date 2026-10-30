@@ -1,0 +1,18 @@
+# Separate stage only; no accepted/production image tag is replaced.
+ARG XFCE_RUNTIME_BASE=sidekicks-neko:polish-xfce-session-deps
+FROM node:22-trixie-slim AS client
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY viewer.js cursor.mjs ./
+RUN mkdir public && npm run build
+
+FROM ${XFCE_RUNTIME_BASE}
+RUN apt-get update && apt-get install -y --no-install-recommends xdg-utils librsvg2-common && rm -rf /var/lib/apt/lists/*
+COPY config /etc/sidekicks
+COPY config/firefox-policies.json /usr/lib/firefox-esr/distribution/policies.json
+COPY server.mjs desktop-apps.mjs /app/
+COPY --from=client /app/public/viewer.js /app/public/viewer.js
+COPY public/home.html /app/public/home.html
+RUN set -eux; mkdir -p /tmp/.ICE-unix; chmod 1777 /tmp/.ICE-unix; chmod +x /etc/sidekicks/*.sh; cp /etc/sidekicks/supervisord-xfce.conf /etc/sidekicks/supervisord.conf; /etc/sidekicks/install-desktop-defaults.sh; /etc/sidekicks/install-xfce-config.sh; rm -f /etc/sidekicks/polish/xfce/panel-context-guard.py /home/neko/.config/autostart/sidekicks-panel-context.desktop; test -s /home/neko/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml; test -s /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml
+ENV DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/sidekicks-session-bus XDG_CURRENT_DESKTOP=XFCE DESKTOP_SESSION=xfce XDG_SESSION_TYPE=x11 SIDEKICKS_DESKTOP_REVISION=sidekicks-xfce-stage LANG=C.UTF-8 LC_ALL=C.UTF-8

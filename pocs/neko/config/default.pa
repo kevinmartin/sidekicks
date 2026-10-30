@@ -1,0 +1,4 @@
+load-module module-null-sink sink_name=audio_output sink_properties=device.description=Sidekicks_Synthetic_Output
+load-module module-native-protocol-unix socket=/tmp/pulseaudio.socket auth-anonymous=1
+load-module module-always-sink
+set-default-sink audio_output

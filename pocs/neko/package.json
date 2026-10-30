@@ -1,0 +1,20 @@
+{
+  "name": "sidekicks-neko-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild viewer.js --bundle --format=esm --outfile=public/viewer.js",
+    "test": "node --test test/*.test.mjs",
+    "verify": "node test/e2e.mjs"
+  },
+  "dependencies": {
+    "@m1k1o/neko": "3.2.0",
+    "sharp": "0.35.5",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.64.1"
+  }
+}

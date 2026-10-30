@@ -1,0 +1,4 @@
+# Minimal Home policy repair over exact worker/QA-tested v6.
+FROM sidekicks-neko:polish-xfce-stage-v6
+COPY config/firefox-policies.json /etc/sidekicks/firefox-policies.json
+COPY config/firefox-policies.json /usr/lib/firefox-esr/distribution/policies.json

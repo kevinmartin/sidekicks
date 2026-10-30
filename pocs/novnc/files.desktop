@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Files
+Comment=Open or restore the disposable Sidekicks files
+Exec=python3 /app/desktop-app.py files
+Icon=/app/desktop-assets/icons/files.png
+Terminal=false
+StartupWMClass=Thunar

@@ -1,0 +1,144 @@
+{
+  "id": "microvm",
+  "backend": "direct-virtualization-framework",
+  "phase": "ready-for-parent-review-with-documented-limits",
+  "builderChecks": {
+    "pass": 21,
+    "fail": 0
+  },
+  "viewerUrl": "http://127.0.0.1:7903/",
+  "adapterUrl": "http://127.0.0.1:7793",
+  "host": {
+    "macOS": "15.3",
+    "build": "24D60",
+    "architecture": "arm64",
+    "appleContainerCLIInstalled": false,
+    "xcode": "14.2"
+  },
+  "configuredResources": {
+    "vcpus": 2,
+    "memoryBytes": 2147483648,
+    "diskBytes": 3221225472,
+    "networkDevices": [],
+    "sharedDirectories": []
+  },
+  "imageSource": "sha256:64c4e5e66e745ee817c0baecf37e8f9084f4ba30c3d988f5c5089fb351c87b0c",
+  "guestOS": "Debian12 bookworm",
+  "kernel": "6.12.28",
+  "capabilities": {
+    "separateKernel": "tested-builder",
+    "exec": "tested-builder",
+    "files": "tested-builder; unsynced crash durability not promised",
+    "capture": "tested-builder",
+    "realNoVNCViewerInput": "tested-builder; independent fast-shortcut issue under investigation",
+    "lifecycle": "tested-builder",
+    "appleContainerCLI": "blocked-host-OS26-required",
+    "nekoUDP": "unsupported-current-TCP-bridge",
+    "kataRuntime": "not-tested/not-attempted",
+    "snapshots": "unsupported",
+    "gpu": "unsupported",
+    "networkEgress": false
+  },
+  "evidence": [
+    "pocs/microvm/artifacts/verification.json",
+    "pocs/microvm/artifacts/vm-a-viewer.json",
+    "pocs/microvm/artifacts/qa-handoff.json",
+    "docs/microvm-verification.md"
+  ],
+  "failedAttempts": [
+    "verification-attempt1-rebind.json",
+    "verification-attempt2-unsynced-write.json",
+    "recovered-rootfs-failure-console.log"
+  ],
+  "updatedAt": "2026-10-26T14:58:07.209902+00:00",
+  "independentCore": {
+    "viewerPass": 6,
+    "boundaryLifecyclePass": 12,
+    "targetedDiscoveryPass": 5,
+    "phase": "complete-released-with-documented-limit",
+    "remainingFinding": "fast immediate click/Control+A/type appended; paced sequence passes; cause not established",
+    "preservedFixedFinding": "alternate-session URL originally wrong; per-session boot metadata fix independently passed",
+    "report": "docs/microvm-verification.md"
+  },
+  "report": "pocs/microvm/sidekicks-microvm-report.md",
+  "imageDelivery": "repo-local only; no screenshot upload",
+  "libraryReport": {
+    "library_file_id": "libfile_a8d31b9037f48191b7553f5bda4a35c8",
+    "file_id": "file_000000002aa881f5a6bb215bfcf0154e",
+    "version": 2,
+    "status": "saved",
+    "screenshotsUploaded": false
+  },
+  "nekoVariant": {
+    "phase": "independently-verified-ready-for-parent-review",
+    "viewerUrl": "http://127.0.0.1:7906/",
+    "adapterUrl": "http://127.0.0.1:7796",
+    "udpPorts": [
+      59120,
+      59139
+    ],
+    "udpBindAddress": "127.0.0.1",
+    "transport": "loopback UDP edges / framed reliable vsock streams",
+    "networkDevices": [],
+    "builderChecks": {
+      "e2e": 9,
+      "transportLifecycle": 8,
+      "postRestart": 2,
+      "unit": 4
+    },
+    "independentChecks": {
+      "initialMedia": 4,
+      "functional": 9,
+      "lifecycle": 5,
+      "postRestartObserver": 5,
+      "observerNote": "five observer subchecks included within lifecycle check; do not sum as unique tests",
+      "finalState": "PASS"
+    },
+    "report": "pocs/microvm/neko/README.md",
+    "knownLimits": [
+      "UDP endpoints bridged through reliable ordered vsock; native UDP parity untested",
+      "post-takeover application backlog observed; controller injection cutoff only",
+      "host maxdgram9216; full guest roundtrip tested through8192"
+    ],
+    "currentBootId": "e93d0d8b-9021-41ea-aa93-7cf5299d5e59",
+    "independentReport": "artifacts/independent-qa/microvm/neko-udp/report.md",
+    "owner": null,
+    "actualHeld": "empty",
+    "sourceAndRuntimeFrozen": true
+  },
+  "natVariant": {
+    "phase": "independently-verified-compared-ready-for-parent-review",
+    "viewerUrl": "http://127.0.0.1:7907/",
+    "adapterUrl": "http://127.0.0.1:7797",
+    "profile": "neko-nat",
+    "session": "nat",
+    "guestIPSource": "vsock info.network.ipv4 (dynamic DHCP)",
+    "guestUDPPorts": [
+      59220,
+      59239
+    ],
+    "egressEnabled": true,
+    "egressIsolated": false,
+    "builderChecks": {
+      "e2e": 9,
+      "lifecycle": 5
+    },
+    "independentChecks": {
+      "functional": 9,
+      "lifecycle": 5,
+      "finalState": 9
+    },
+    "comparison": {
+      "windows": 4,
+      "attempts": 120,
+      "valid": 120,
+      "invalid": 0,
+      "scope": "single fixed-order local comparison; no causal superiority claim",
+      "rawDirectory": "artifacts/independent-qa/microvm/nat/comparison-2026-10-26T14-44-44-063Z"
+    },
+    "sourceAndRuntimeFrozen": true,
+    "owner": null,
+    "actualHeld": "empty",
+    "report": "pocs/microvm/nat/verification.md"
+  }
+}

@@ -1,0 +1,11 @@
+# Staging-only dependency measurement over the preserved live-drag image.
+FROM sidekicks-novnc:live-drag
+USER root
+RUN mkdir -p /opt/sidekicks-polish && \
+    dpkg-query -W -f='${binary:Package}\t${Version}\t${Installed-Size}\n' > /opt/sidekicks-polish/packages-before.tsv && \
+    apt-get update && \
+    apt-cache policy thunar > /opt/sidekicks-polish/thunar-policy.txt && \
+    apt-get install -y --no-install-recommends thunar && \
+    dpkg-query -W -f='${binary:Package}\t${Version}\t${Installed-Size}\n' > /opt/sidekicks-polish/packages-after.tsv && \
+    rm -rf /var/lib/apt/lists/*
+USER desktop

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Sidekicks Browser
+Exec=/etc/sidekicks/browser.sh
+Icon=/etc/sidekicks/browser.png
+Terminal=false

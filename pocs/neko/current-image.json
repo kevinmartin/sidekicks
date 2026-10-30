@@ -1,0 +1,11 @@
+{
+  "imageTag": "sidekicks-neko:polish-xfce-stage-v7",
+  "imageId": "sha256:36e11c585ece469a01f5bf705d5e1357afe767ba8e858eafba548d38786457a1",
+  "architecture": "linux/arm64",
+  "desktop": "Xfce 4.20 / GTK3",
+  "workerVerification": "PASS v7 focused7/7 and independent focused7/7; v6 unaffected QA12 PASS +4 prior PASS references retained, original Home FAIL preserved",
+  "evidence": "test/artifacts/xfce-stage/final-freeze-v7/handoff.json",
+  "historicalOpenboxImage": "sidekicks-neko:3.2.0-ux1",
+  "independentEvidence": "artifacts/independent-qa/desktop-polish/stage-neko-2026-10-28T17-41-34-416Z/result.json",
+  "independentEvidenceSHA256": "61bd63413f2399cc02c4413c9a118980271c9d65c3f7c757cc9d66b16229558f"
+}

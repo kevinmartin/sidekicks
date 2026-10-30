@@ -1,0 +1,8 @@
+.build/
+.state/
+__pycache__/
+.library-transfer/
+
+.library-transfer-neko/
+
+.library-transfer-nat/

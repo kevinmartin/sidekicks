@@ -1,0 +1,2 @@
+FROM sidekicks-neko:microvm-polish-base
+COPY --from=sidekicks-neko:microvm-loopback-polish-pinned /usr/bin/neko /usr/bin/neko

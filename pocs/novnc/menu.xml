@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_menu xmlns="http://openbox.org/">
+  <menu id="root-menu" label="Sidekicks">
+    <item label="Browser"><action name="Execute"><command>python3 /app/desktop-app.py browser</command></action></item>
+    <item label="Terminal"><action name="Execute"><command>python3 /app/desktop-app.py terminal</command></action></item>
+    <item label="Files"><action name="Execute"><command>python3 /app/desktop-app.py files</command></action></item>
+  </menu>
+</openbox_menu>

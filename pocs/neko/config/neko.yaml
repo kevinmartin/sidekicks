@@ -1,0 +1,69 @@
+legacy: false
+server:
+  bind: 127.0.0.1:8080
+  cors:
+    allowed_origins: ["http://127.0.0.1:7902", "http://localhost:7902"]
+desktop:
+  screen: 1280x720@30
+  input:
+    enabled: false
+session:
+  implicit_hosting: false
+  locked_controls: true
+  cookie:
+    enabled: false
+member:
+  provider: multiuser
+  multiuser:
+    admin_password: sidekicks-disposable-admin
+    user_password: sidekicks-disposable-view
+    user_profile:
+      can_login: true
+      can_connect: true
+      can_watch: true
+      can_host: true
+      can_share_media: false
+      can_access_clipboard: false
+      sends_inactive_cursor: false
+      can_see_inactive_cursors: false
+webrtc:
+  icelite: true
+  epr: 59020-59039
+  nat1to1: [127.0.0.1]
+  ip_retrieval_url: ""
+  # A nonempty server list prevents upstream's default external STUN fallback.
+  # Local ICE Lite needs no STUN; the loopback-only address cannot contact outside.
+  iceservers:
+    frontend: [{urls: ["stun:127.0.0.1:9"]}]
+    backend: []
+capture:
+  video:
+    codec: vp8
+    # Cursor shape/hotspot travels on the WebRTC data channel; never bake a duplicate into VP8.
+    show_pointer: false
+    ids: [interactive, quality]
+    pipelines:
+      interactive:
+        fps: "30"
+        gst_encoder: vp8enc
+        gst_params:
+          target-bitrate: "round(2200000)"
+          deadline: "1"
+          cpu-used: "8"
+          threads: "2"
+          keyframe-max-dist: "30"
+      quality:
+        fps: "30"
+        gst_encoder: vp8enc
+        gst_params:
+          target-bitrate: "round(5000000)"
+          deadline: "1"
+          cpu-used: "4"
+          threads: "2"
+          keyframe-max-dist: "30"
+  microphone:
+    enabled: false
+  webcam:
+    enabled: false
+plugins:
+  enabled: false

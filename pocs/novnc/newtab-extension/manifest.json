@@ -1,0 +1,1 @@
+{"manifest_version":3,"name":"Sidekicks Home","version":"1.0.0","description":"Use the local Sidekicks home for a new tab in the disposable guest browser.","chrome_url_overrides":{"newtab":"newtab.html"}}

@@ -1,0 +1,8 @@
+# Whole-session evaluation only; original live tags/containers are untouched.
+FROM sidekicks-novnc:polish-thunar-deps
+USER root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends xfwm4 xfce4-panel xfdesktop4 xfce4-settings xfce4-terminal xfce4-session && \
+    dpkg-query -W -f='${binary:Package}\t${Version}\t${Installed-Size}\n' > /opt/sidekicks-polish/packages-xfce.tsv && \
+    rm -rf /var/lib/apt/lists/*
+USER desktop

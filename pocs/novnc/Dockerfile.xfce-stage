@@ -1,0 +1,7 @@
+FROM sidekicks-novnc:polish-xfce-deps
+USER root
+COPY . /app
+RUN sh /app/install-xfce-stage.sh && dpkg-query -W > /app/package-versions.txt
+USER desktop
+ENV SIDEKICKS_DESKTOP_STACK=xfce
+CMD ["/app/entrypoint-xfce.sh"]

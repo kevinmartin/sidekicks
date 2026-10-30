@@ -1,0 +1,116 @@
+{
+  "id": "novnc",
+  "summary": "Runnable final native ARM64 noVNC: independent basic14PASS + native appearance5PASS; own24 E2E,5 framing,6 malformed,5 restart/theme,3 native and4 stress rounds PASS. Controlled cross-backend timing pending Neko idle; not a noVNC demo blocker.",
+  "runtime": {
+    "platform": "linux/arm64",
+    "emulated": false,
+    "cpus": 2,
+    "memoryMiB": 2048,
+    "shmMiB": 512
+  },
+  "viewerUrl": "http://127.0.0.1:7901/",
+  "adapterUrl": "http://127.0.0.1:7791",
+  "testedCapabilities": {
+    "keyboard": {
+      "status": "tested",
+      "detail": "PASS via real disposable desktop and isolated headless viewer/API tests; physical human input untested. See pocs/novnc/README.md and artifacts/novnc/e2e.json."
+    },
+    "click": {
+      "status": "tested",
+      "detail": "PASS via real disposable desktop and isolated headless viewer/API tests; physical human input untested. See pocs/novnc/README.md and artifacts/novnc/e2e.json."
+    },
+    "rightClick": {
+      "status": "tested",
+      "detail": "PASS via real disposable desktop and isolated headless viewer/API tests; physical human input untested. See pocs/novnc/README.md and artifacts/novnc/e2e.json."
+    },
+    "doubleClick": {
+      "status": "tested",
+      "detail": "PASS via real disposable desktop and isolated headless viewer/API tests; physical human input untested. See pocs/novnc/README.md and artifacts/novnc/e2e.json."
+    },
+    "scroll": {
+      "status": "tested",
+      "detail": "PASS on active officialx11vnc0.9.17: independent viewer horizontal+vertical and normalized axes.0.9.16 horizontalFAIL baseline preserved (MAX_BUTTONS5). Physical trackpad untested."
+    },
+    "modifiers": {
+      "status": "tested",
+      "detail": "PASS via real disposable desktop and isolated headless viewer/API tests; physical human input untested. See pocs/novnc/README.md and artifacts/novnc/e2e.json."
+    },
+    "screenshot": {
+      "status": "tested",
+      "detail": "PASS via real disposable desktop and isolated headless viewer/API tests; physical human input untested. See pocs/novnc/README.md and artifacts/novnc/e2e.json."
+    },
+    "theme": {
+      "status": "implemented",
+      "detail": "New sky wallpaper, native decorated windows, glass dock/browser/terminal/files, launch-or-restore and viewer fullscreen prepared; new UX QA pending. Previous validated theme evidence preserved."
+    },
+    "humanTakeover": {
+      "status": "tested",
+      "detail": "PASS generic injection cutoff, queued/stale409, actual held release and native terminal takeover;4char/20ms paced injection +250ms bounded settling. Independent final fixture ACK323.8ms, length8\u21928, no postACKbot events. applicationQueueFlushed:false; no generic queue rollback/drain guarantee."
+    },
+    "drag": {
+      "status": "tested",
+      "detail": "PASS through browser-viewer RFB drag/drop with release; normalized pointer API implemented but not separately asserted by own suite."
+    },
+    "zoomEmulated": {
+      "status": "untested",
+      "detail": "Ctrl+wheel/shortcut emulation possible; no native pinch/swipe claim."
+    },
+    "pinchNative": {
+      "status": "unsupported",
+      "detail": "No native multitouch or audio channel in this RFB/X11 POC; physical Mac gestures untested."
+    },
+    "swipeNative": {
+      "status": "unsupported",
+      "detail": "No native multitouch or audio channel in this RFB/X11 POC; physical Mac gestures untested."
+    },
+    "audio": {
+      "status": "unsupported",
+      "detail": "No native multitouch or audio channel in this RFB/X11 POC; physical Mac gestures untested."
+    }
+  },
+  "evidence": [
+    "artifacts/novnc/e2e.json",
+    "artifacts/novnc/restart.json",
+    "artifacts/novnc/viewer.png",
+    "artifacts/novnc/desktop.png",
+    "artifacts/novnc/desktop-640.png",
+    "artifacts/novnc/wallpaper.png",
+    "artifacts/novnc/terminal.png",
+    "artifacts/novnc/desktop-after-restart.png",
+    "artifacts/novnc/x11vnc.log",
+    "artifacts/novnc/listeners.txt",
+    "artifacts/novnc/native-takeover.json",
+    "artifacts/novnc/native-takeover.png",
+    "artifacts/novnc/malformed.json",
+    "artifacts/novnc/x11vnc-version.txt",
+    "artifacts/novnc/x11vnc-source.sha256",
+    "artifacts/independent-qa/novnc-viewer-basic.json",
+    "artifacts/novnc/stress.json",
+    "artifacts/novnc/interaction-evidence.mp4",
+    "artifacts/novnc/x11vnc-e2e.log",
+    "artifacts/novnc/source-manifest.json",
+    "artifacts/independent-qa/novnc-viewer-appearance.json"
+  ],
+  "blockers": [],
+  "limitations": [
+    "Physical human/Mac trackpad/mobile untested",
+    "Native pinch/swipe unsupported as native RFB/X11 multitouch",
+    "Audio transport unsupported",
+    "No matched cross-backend benchmark",
+    "Normalized drag/zoom emulation not separately asserted by own suite"
+  ],
+  "updatedAt": "2026-10-26T02:44:33.080232+00:00",
+  "openIssues": [],
+  "independentQA": {
+    "basic": "14PASS",
+    "nativeTerminalTakeover": "PASS",
+    "measurementAndRestart": "Appearance5PASS; provisional30/30 decoded-frame samples; controlled comparison pending Neko idle",
+    "evidence": "artifacts/independent-qa/novnc-viewer-basic.json"
+  },
+  "desktopUX": {
+    "status": "implemented",
+    "theme": "sidekicks-sky",
+    "validation": "separate staging image pending real-window and fullscreen QA",
+    "rollbackImage": "sidekicks-novnc:pre-cloud-ux"
+  }
+}

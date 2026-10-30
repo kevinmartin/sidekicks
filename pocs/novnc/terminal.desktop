@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal
+Comment=Open or restore the Sidekicks terminal
+Exec=python3 /app/desktop-app.py terminal
+Icon=/app/desktop-assets/icons/terminal.png
+Terminal=false
+StartupWMClass=SidekicksTerminal

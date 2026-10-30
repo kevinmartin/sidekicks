@@ -1,0 +1,6 @@
+<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN" "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">
+<Menu>
+ <Name>Sidekicks</Name><DefaultAppDirs/>
+ <Include><Filename>sidekicks-browser.desktop</Filename><Filename>sidekicks-terminal.desktop</Filename><Filename>sidekicks-files.desktop</Filename></Include>
+ <Layout><Filename>sidekicks-browser.desktop</Filename><Filename>sidekicks-terminal.desktop</Filename><Filename>sidekicks-files.desktop</Filename></Layout>
+</Menu>

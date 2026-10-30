@@ -1,0 +1,10 @@
+--- a/server/internal/webrtc/manager.go
++++ b/server/internal/webrtc/manager.go
+@@ -186,6 +186,7 @@
+ 	}
+ 
+ 	settings.DisableMediaEngineCopy(true)
++	settings.SetIncludeLoopbackCandidate(true)
+ 	settings.SetICETimeouts(disconnectedTimeout, failedTimeout, keepAliveInterval)
+ 	settings.SetNAT1To1IPs(manager.config.NAT1To1IPs, webrtc.ICECandidateTypeHost)
+ 	settings.SetLite(manager.config.ICELite)

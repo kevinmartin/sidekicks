@@ -1,0 +1,35 @@
+! Shared terminal styling. uxterm still chooses UTF-8 locale and UXTerm class;
+! these resources style both classes and the supported Sidekicks launcher.
+XTerm*background: #10263d
+XTerm*foreground: #e8f7ff
+XTerm*cursorColor: #39cee3
+XTerm*highlightColor: #245e7c
+XTerm*highlightTextColor: #ffffff
+XTerm*faceName: DejaVu Sans Mono
+XTerm*faceSize: 11
+XTerm*renderFont: true
+XTerm*internalBorder: 10
+XTerm*saveLines: 5000
+XTerm*scrollBar: false
+UXTerm*background: #10263d
+UXTerm*foreground: #e8f7ff
+UXTerm*cursorColor: #39cee3
+UXTerm*highlightColor: #245e7c
+UXTerm*highlightTextColor: #ffffff
+UXTerm*faceName: DejaVu Sans Mono
+UXTerm*faceSize: 11
+UXTerm*renderFont: true
+UXTerm*internalBorder: 10
+UXTerm*saveLines: 5000
+UXTerm*scrollBar: false
+SidekicksTerminal*background: #10263d
+SidekicksTerminal*foreground: #e8f7ff
+SidekicksTerminal*cursorColor: #39cee3
+SidekicksTerminal*highlightColor: #245e7c
+SidekicksTerminal*highlightTextColor: #ffffff
+SidekicksTerminal*faceName: DejaVu Sans Mono
+SidekicksTerminal*faceSize: 11
+SidekicksTerminal*renderFont: true
+SidekicksTerminal*internalBorder: 10
+SidekicksTerminal*saveLines: 5000
+SidekicksTerminal*scrollBar: false

@@ -1,0 +1,50 @@
+{
+  "phase": "source-frozen-handed-to-independent-qa",
+  "liveRuntimeChanged": true,
+  "acceptedBase": "sha256:a7120e76048242bacf22b36e3c916339f71ad82858e0ce69c53d2fe8611fec85",
+  "imageTag": "sidekicks-neko:3.2.0-ux1",
+  "unitTests": {
+    "passed": 11,
+    "failed": 0
+  },
+  "checks": {
+    "javascriptPythonXmlShellSyntax": "PASS",
+    "clientBundle": "PASS",
+    "decodedDesktop": "PASS both routes",
+    "windowControls": "PASS per-case native/gated; prior diagnostic whole-run failures retained",
+    "sameWindowRestore": "PASS browser and terminal geometry/identity",
+    "singleCursor": "PASS active both routes + observer nonempty native canvas/gated image with local cursor hidden",
+    "newTabHome": "PASS actual Ctrl+T request + decoded Home; physical shortcuts and plus-button independent QA pending",
+    "hostSpoofBoundary": "PASS both published ports with actual internal token and forged internal Host/Origin",
+    "escapeHeldState": "PASS native and gated actual Shift+button1 held then empty after Escape",
+    "cleanOneTabHandoff": "PASS visually inspected fresh Home after explicit close/reopen; no later Ctrl+T",
+    "normalRestart": "Independent QA pending for final UX image"
+  },
+  "awaiting": "Independent QA owns Docker Neko only; integration may export the frozen image for isolated VM templates.",
+  "at": "2026-10-26T16:54:49.888053+00:00",
+  "imageId": "sha256:1aca12ae8c4937e2562c0b2331e628b3dc8316d5e494bbfa75e94d91dbaf2d53",
+  "architecture": "arm64",
+  "homeSHA256": "45899f0abc84afd59fec79aa7d3b149202965f32a1052f87dcad33002b1cc14a",
+  "preservedContainers": [
+    "sidekicks-neko-baseline-preserved",
+    "sidekicks-neko-ux-attempt1"
+  ],
+  "historicalBaselineStatus": "pocs/neko/status-baseline.json",
+  "container": "5952b793a5efee6f747bfb3e992c1afd0bdd2de95315cfd663ab096be63db1c3",
+  "sourceFrozen": true,
+  "evidence": {
+    "nativeFinish": "pocs/neko/test/artifacts/ux/native-2026-10-26T16-47-39-687Z/report.json",
+    "gatedFinish": "pocs/neko/test/artifacts/ux/gated-2026-10-26T16-49-48-809Z/report.json",
+    "escape": "pocs/neko/test/artifacts/ux/escape-held-regression.json",
+    "observer": "pocs/neko/test/artifacts/ux/native-observer-proof.json",
+    "handoff": "pocs/neko/test/artifacts/ux/qa-handoff.json",
+    "sourceFreeze": "pocs/neko/test/artifacts/ux/source-freeze.json",
+    "cleanDesktop": "pocs/neko/test/artifacts/ux/handoff-clean-desktop.jpg"
+  },
+  "limits": [
+    "Physical Mac cursor/trackpad/reserved-key behavior untested; headless synthetic Chrome input only.",
+    "Final UX normal restart and fresh-single-tab/two-dock-restores/Ctrl+W acceptance belongs to independent QA.",
+    "Historical baseline latency/audio do not measure new compositor/windowed UX.",
+    "Whole early diagnostic runs retain FAIL on observed defects and test setup/locator issues; only named passed cases and separate final6/6 finish runs are claimed."
+  ]
+}

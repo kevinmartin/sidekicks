@@ -1,0 +1,9 @@
+ARG CANDIDATE
+FROM ${CANDIDATE} AS pruned
+# Remove known unused graphical apps only. Keep shared libraries/tooling until a
+# separate dependency audit justifies removal; apt's suggested autoremove is
+# captured, not silently applied to a CGO/GStreamer runtime.
+RUN mkdir -p /usr/share/sidekicks-prune && dpkg-query -W -f='${binary:Package}\t${Version}\t${Installed-Size}\n' > /usr/share/sidekicks-prune/packages-before.tsv && sha256sum /usr/bin/neko /usr/lib/xorg/Xorg /usr/lib/aarch64-linux-gnu/libgstreamer-1.0.so.0 > /usr/share/sidekicks-prune/transport.sha256 && apt-get -s purge openbox tint2 picom pcmanfm xterm feh librsvg2-bin > /usr/share/sidekicks-prune/purge-plan.txt && apt-get purge -y openbox tint2 picom pcmanfm xterm feh librsvg2-bin > /usr/share/sidekicks-prune/purge-log.txt && apt-get -s autoremove --purge > /usr/share/sidekicks-prune/autoremove-not-applied.txt && dpkg-query -W -f='${binary:Package}\t${Version}\t${Installed-Size}\n' > /usr/share/sidekicks-prune/packages-after.tsv && sha256sum -c /usr/share/sidekicks-prune/transport.sha256 && ldd /usr/bin/neko /usr/bin/xfwm4 /usr/bin/xfce4-terminal /usr/bin/thunar > /usr/share/sidekicks-prune/runtime-libraries.txt && ! grep 'not found' /usr/share/sidekicks-prune/runtime-libraries.txt && rm -f /etc/sidekicks/openbox.xml /etc/sidekicks/tint2rc /etc/sidekicks/picom.conf /etc/sidekicks/desktop.sh /etc/sidekicks/desktop-ready.py && cat /usr/share/sidekicks-prune/purge-log.txt
+
+FROM scratch AS evidence
+COPY --from=pruned /usr/share/sidekicks-prune/ /

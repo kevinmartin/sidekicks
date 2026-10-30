@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Sidekicks Browser
+Comment=Open a guest web link in the Sidekicks Firefox profile
+Exec=/usr/bin/python3 /etc/sidekicks/browser-url.py %u
+Icon=/etc/sidekicks/browser.png
+Terminal=false
+NoDisplay=true
+MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;

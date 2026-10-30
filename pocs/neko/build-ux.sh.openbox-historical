@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C LANG=C
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+EXPECTED_BASE=sha256:a7120e76048242bacf22b36e3c916339f71ad82858e0ce69c53d2fe8611fec85
+IMAGE="${SIDEKICKS_NEKO_IMAGE:-sidekicks-neko:3.2.0-ux1}"
+test "$(docker image inspect -f '{{.Id}}' sidekicks-neko:3.2.0-source)" = "$EXPECTED_BASE"
+mkdir -p "$HERE/test/artifacts/ux"
+for asset in wallpaper.svg home.html icons/browser.svg icons/terminal.svg icons/files.svg; do
+  test -s "$ROOT/shared/desktop/$asset" || { printf 'Missing shared desktop asset: %s\n' "$asset" >&2; exit 1; }
+done
+cp "$ROOT/shared/desktop/wallpaper.svg" "$HERE/config/wallpaper.svg"
+cp "$ROOT/shared/desktop/home.html" "$HERE/public/home.html"
+for icon in browser terminal files; do cp "$ROOT/shared/desktop/icons/$icon.svg" "$HERE/config/$icon.svg"; done
+docker build --platform linux/arm64 --progress plain -f "$HERE/Dockerfile.ux" -t "$IMAGE" "$HERE" 2>&1 | tee "$HERE/test/artifacts/ux/build.log"
+test "$(docker image inspect -f '{{.Id}}' sidekicks-neko:3.2.0-source)" = "$EXPECTED_BASE"
+docker image inspect "$IMAGE" > "$HERE/test/artifacts/ux/image.json"
+printf 'Built %s without starting/restarting a service.\n' "$IMAGE"
