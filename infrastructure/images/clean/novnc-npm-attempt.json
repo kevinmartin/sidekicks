@@ -1,0 +1,14 @@
+{
+  "name": "@novnc/novnc",
+  "version": "1.6.0",
+  "url": "https://registry.npmjs.org/@novnc/novnc/-/novnc-1.6.0.tgz",
+  "sha256": "9de7af6f04478c2373d3b235b2394c9057c789b71f1e1f99bf2db378762ec5be",
+  "npmIntegrity": "sha512-CJrmdSe9Yt2ZbLsJpVFoVkEu0KICEvnr3njW25Nz0jodaiFJtg8AYLGZogRYy0/N5HUWkGUsCmegKXYBSqwygw==",
+  "npmShasum": "e68ac47d8d4151a34a80f408b5ffa3af5e4780d2",
+  "license": "MPL-2.0",
+  "verifiedAt": "2026-10-30T02:22:16.153479+00:00",
+  "verification": "HTTPS official npm registry metadata; downloaded bytes match published sha512 integrity and sha1 shasum",
+  "status": "REJECTED_RUNTIME_ASSET_LAYOUT",
+  "failure": "Coordinator actual clean build verified SHA but failed required core/rfb.js/LICENSE.txt layout assertion. Official npm package is a compiled CommonJS lib distribution and cannot be served as the ES-module source tree expected by the viewer.",
+  "disposition": "Preserved as failed attempt; recipe now uses official noVNC v1.6.0 codeload source archive. No APT/package/base changes."
+}

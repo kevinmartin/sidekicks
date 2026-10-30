@@ -1,0 +1,17 @@
+{
+  "name": "sidekicks-compute-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write 'desktop/**/*.{html,mjs,css}' fixture.html",
+    "check": "prettier --check 'desktop/**/*.{html,mjs,css}' fixture.html && node --test desktop/*.test.mjs",
+    "build": "esbuild desktop/neko/viewer.mjs --bundle --format=esm --outfile=../.run/compute-web/neko.js",
+    "test": "node --test desktop/*.test.mjs"
+  },
+  "devDependencies": {
+    "@m1k1o/neko": "3.2.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.56.1",
+    "prettier": "3.6.2"
+  }
+}

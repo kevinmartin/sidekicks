@@ -1,0 +1,48 @@
+# Private guest service
+
+This Go service runs **inside a Linux workload as a non-root user**. Container/VM isolation is the runtime's responsibility; an authenticated caller can explicitly execute a shell in the guest. The workspace file API is a convenience boundary, not a sandbox around arbitrary guest commands.
+
+The default listener is `127.0.0.1:8080` inside the guest. No host API publication is required: `sidekicks-agent request BASE64JSON` makes an authenticated loopback request inside the same guest, and returns a JSON response over runtime exec. `SIDEKICKS_AGENT_TOKEN` is read from the guest environment, is 32–256 non-whitespace bytes, is never placed in request argv, and is not forwarded in command environments. Every HTTP route requires `Authorization: Bearer ...`; every nonempty `Origin` is rejected. The one-shot client never follows redirects or uses HTTP proxy environment variables.
+
+Routes:
+
+| Method/path | Request | Response |
+|---|---|---|
+| `GET /health` | none | current readiness (`200 {"ready":true}` or `503 {"ready":false}`) |
+| `POST /exec` | JSON `argv`, optional relative `cwd`, `env`, `timeoutMs` | exit code, stdout/stderr, separate truncation flags, `timedOut` |
+| `POST /cancel` | JSON `requestId` | authenticated per-request cancellation acknowledgement |
+| `GET /files?path=relative` | none | exact file bytes |
+| `PUT /files?path=relative` | raw bytes | `{"ok":true,"bytes":N}` |
+| `POST /browser` | optional injected browser capability | handler-owned response; same outer authentication/origin checks |
+| `POST /desktop/connect` | optional desktop connection initialization | handler-owned response |
+| `GET /desktop/state` | current desktop state | handler-owned response |
+| `POST /desktop/launch` | fixed application launch | handler-owned response |
+| `GET` or `POST /desktop/control` | inspect/change ownership | handler-owned response |
+| `POST /desktop/input` | normalized input | handler-owned response |
+| `GET /desktop/capture` | fresh capture, without query parameters | handler-owned response |
+
+`Config.ExtraRoutes` accepts only the exact optional routes/methods listed above, cannot override service routes, and is copied during construction. Prefix routing, escaped route aliases and capability query parameters are not accepted. Authentication and Origin rejection precede every delegate, and capability bodies are bounded to 128 KiB before delegation. The caller must enforce capability-specific message validation and response limits.
+
+`Config.Health` optionally checks actual current workload readiness on each authenticated health request. A callback failure returns only `ready:false`; private error details never enter the response. A nil callback preserves shell readiness. Desktop owners should check the live session components while allowing an intentionally closed browser; that policy belongs to the callback, not a stale marker or the guest API.
+
+Exec accepts 1–256 argv entries totaling at most 64 KiB, requires a normalized workspace-relative initial cwd, resolves simple executable names through `/usr/local/bin:/usr/bin:/bin`, and never implicitly adds a shell. Only LANG, LC_ALL, TZ, TERM and COLORTERM are caller-overridable. The default timeout is 20 seconds, permitted explicit timeouts are 100–60,000 ms, and four commands may run concurrently by default (configurable 1–16). Stdout and stderr are bounded **while draining**, each to 256 KiB, with excess discarded and explicit truncation flags. Nonzero command exits are successful API responses containing the nonzero exit code; failure to start is HTTP 422.
+
+`Config.ExecGate` optionally wraps the **whole command lifetime** in workload ownership. Authentication and request/path/executable validation happen before the gate. A denied or revoked gate returns a generic HTTP 409 without controller error details. The callback may execute at most once, cannot retain a running command after its gate returns, and its cancellation is joined with the outer request deadline. No response is written inside the callback. A nil gate preserves the headless-shell behavior. Desktop owners can grant a temporary agent lease for exec and cancel it on human takeover; this does not turn arbitrary guest code into a trusted input driver.
+
+Cancellation, deadline and normal completion kill the owned process group. Pipes held open by descendants are bounded by a 250 ms wait delay. This is not a guarantee that a deliberately daemonizing process which creates a new session/process group will be killed; runtime stop/destroy remains the final process cleanup boundary. Docker should use its init process to reap adopted descendants. The guest command's initial cwd is opened before Linux fork/exec and referenced through `/proc/self/fd`; it does not depend on a mutable path lookup at child start. Darwin uses a path only for local unit-test portability; server mode rejects non-Linux hosts.
+
+File requests are at most 1 MiB and use normalized relative paths without observed symlinks. `os.Root` confines operations despite symlink/rename races; final file opens additionally use `O_NOFOLLOW`, reads reject non-regular files, and FIFOs are opened nonblocking before their type is checked. Each write uses a random mode-0600 temp file in an **opened parent root**, fsyncs data, atomically renames within that same parent, then fsyncs the same directory. Concurrent parent renames cannot redirect publication or make a different directory receive the durability sync. New parent directories are not created implicitly. Workspace mount boundaries/device nodes are runtime concerns; supply a private unprivileged workspace, not host files or `/proc`.
+
+The one-shot envelope is `{method,path,body}` with `body` encoded by JSON as base64 bytes. The whole decoded request JSON is limited to 32 KiB, so file writes through this transport are smaller than the HTTP file limit (approximately 20 KiB after base64/envelope overhead). The response is `{status,body}`, also using base64 bytes, with a 2 MiB raw HTTP-body read cap. Encoded response expansion must be accounted for by the runtime exec transport. Extremely escape-heavy/binary stdout can exceed that response cap after JSON encoding even though command capture itself remains bounded; the client then returns an explicit transport error.
+
+Tests use real guest-service handlers, actual local child commands, filesystem roots/symlinks/renames, process cancellation/concurrency, bounded capture and serialized HTTP over `net.Pipe`. They do not establish Docker isolation or physical browser behavior; those require independent integration checks.
+
+## Runtime transport cancellation
+
+Closing a Docker exec response stream does not itself terminate the helper or its guest HTTP operation. The runtime therefore injects a fresh 16-byte random ID (`requestId`, 32 lowercase hexadecimal characters) and an absolute bounded `deadlineUnixMs` into each helper envelope. The helper forwards them as `X-Sidekicks-Request-ID` and `X-Sidekicks-Deadline`, and refuses an expired envelope before making HTTP requests. Both fields must appear together; a tracked deadline may be at most two minutes in the future. Host/guest wall clocks must be reasonably synchronized; no clock settings are changed by this protocol.
+
+After authentication, the guest atomically registers the request and derives its context from that deadline. The runtime can launch a second fixed authenticated helper request to `POST /cancel` with `{"requestId":"..."}` using a fresh bounded cleanup context. Cancellation is scoped to that opaque request ID; it is not a global stop or a release of another viewer's ownership. A cancellation arriving before its original request records a tombstone, so the delayed original cannot start. IDs remain unavailable for replay for two minutes after completion/cancellation; absolute envelope expiry also prevents a much later daemon-delayed helper from starting after tombstone pruning.
+
+The registry holds at most 65,536 active/completed/tombstone records, including at most 1,024 active requests. Each admitted request reserves space for its eventual tombstone. A bounded expiry heap reclaims inactive records on access without scanning the entire registry for each operation; active records are never pruned. Repeated cancellation updates one existing heap entry rather than adding more records. Capacity exhaustion still returns 429 rather than dropping a cancellation handle or starting untracked work, and an existing active request can still be canceled when the registry is full. The larger bound improves sustained request capacity but is not an unlimited-throughput guarantee; a burst can still fill the registry for up to the tombstone retention period. Legacy direct HTTP requests without tracking metadata remain bounded by the operation timeout but do not gain this runtime cancellation protocol.
+
+A 200 cancellation response with `ok:true` means the request handler finished, or an as-yet-unstarted matching ID was blocked. It does not undo already completed guest side effects. The optional `canceled` boolean indicates whether an active handler was found, not whether cancellation was required for safety. The endpoint waits at most four seconds for an active handler to return; an ignoring/stalled handler produces 503, never a successful cleanup claim. The runtime must surface failed or missing acknowledgement as cancellation **unconfirmed**. Normal exec completion includes its existing process-group cleanup. Deliberately detached `setsid` descendants remain outside that guarantee and require runtime stop/destroy.

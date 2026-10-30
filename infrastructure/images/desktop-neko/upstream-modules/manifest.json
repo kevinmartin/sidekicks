@@ -1,0 +1,45 @@
+{
+  "upstreamVersion": "v3.2.0",
+  "archiveSHA256": "3e8a3f7d7f19ed1097b0c28b985894df6c40769ceb6d65cfdffea844026f839d",
+  "goToolchain": "go1.27.3",
+  "moduleGoMinimum": "1.26.0",
+  "changedUpstreamFiles": [
+    "go.mod",
+    "go.sum"
+  ],
+  "pins": {
+    "github.com/go-chi/chi/v5": "v5.4.0",
+    "github.com/pion/dtls/v3": "v3.1.4",
+    "github.com/pion/stun/v3": "v3.1.5",
+    "github.com/pion/transport/v4": "v4.0.2",
+    "golang.org/x/crypto": "v0.58.0",
+    "golang.org/x/net": "v0.62.0",
+    "golang.org/x/sys": "v0.49.0",
+    "golang.org/x/text": "v0.43.0",
+    "golang.org/x/time": "v0.14.0"
+  },
+  "original": {
+    "go.mod": "a9102a6a216e149cd2a02a2eba5c6416976bdb2db421c5055c7142c05b7c3dfb",
+    "go.sum": "1b0b1eee88525b492fb4430a17d1eb632e2bcc2b2d60fbab1f00a0a3ef7b260c"
+  },
+  "overlay": {
+    "go.mod": "f5a599e3fa7f89516c099f8417f4f49a18c6f45f4e603765bc14eb4bfb6f63e0",
+    "go.sum": "1082f5aad1bbb5649adccd7035b89ac7f5340c4d68accaaad8e12da83aa87d70"
+  },
+  "status": "REVIEWABLE_MODULE_OVERLAY_NOT_IMAGE_ACCEPTANCE",
+  "sourceTestLimitations": [
+    "DTLS3.1.4 TestHandshakeMessageCertificate golden fixture differs in new Go1.27 x509.RawSignatureAlgorithm field",
+    "Host lacks native GStreamer development headers, so full Neko CGO source tests cannot compile here"
+  ],
+  "runtimeValidation": "No image build, tagging, binary replacement or media E2E by this worker; parent acceptance still required.",
+  "revision": "chi-5.4.0-security-followup",
+  "chiFollowup": {
+    "advisory": "CVE-2026-114437 / GHSA-j6qf-3m9c-vwj3",
+    "affectedFunction": "middleware.ClientIPFromXFF",
+    "fixedVersion": "v5.4.0",
+    "officialCommit": "7f9b7448f51d28804fac98c0a17bc2a7cec1079f",
+    "sourceTests": "Chi/router and Chi/middleware race-short tests PASS on Go1.27.3",
+    "compatibility": "Only selected Chi module changes versus previous overlay; all other selected versions and Go minimum unchanged. Full Neko linked build/media E2E still parent-owned.",
+    "deploymentScope": "Neko source has no ClientIPFromXFF reference; previous exact ELF symbol table contained RealIP and GetClientIP but not ClientIPFromXFF. Keep deprecated RealIP disabled with server.proxy:false."
+  }
+}

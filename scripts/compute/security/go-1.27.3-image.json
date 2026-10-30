@@ -1,0 +1,9 @@
+{
+  "reference": "golang:1.27.3-trixie",
+  "digest": "sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385",
+  "architectures": {
+    "amd64": "sha256:5bbe76a31abbe0f1449d7820e550131c020b097c24d3bcfc5ad1231779982c1c",
+    "arm64": "sha256:cb0d3faca7ea5b063b6cbf10a5e381421819a11591ca4cf83507bc8227d7abb6"
+  },
+  "observedAt": "2026-10-30T03:54:25.749608+00:00"
+}

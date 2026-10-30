@@ -1,0 +1,12 @@
+[Configuration]
+FontName=DejaVu Sans Mono 11
+FontUseSystem=FALSE
+ColorUseTheme=FALSE
+ColorForeground=#e8f7ff
+ColorBackground=#10263d
+ColorCursor=#39cee3
+MiscDefaultGeometry=88x24
+MiscMenubarDefault=FALSE
+MiscToolbarDefault=FALSE
+MiscBordersDefault=TRUE
+ScrollingLines=5000

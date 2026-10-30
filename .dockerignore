@@ -1,0 +1,11 @@
+**
+!.run/
+!.run/compute-bin/
+!.run/compute-bin/sidekicks-agent
+!infrastructure/
+!infrastructure/images/
+!infrastructure/images/**
+!.run/compute-bin/sidekicks-x11-test
+!.run/compute-bin/sidekicks-apps-test
+!.run/compute-web/
+!.run/compute-web/neko.js

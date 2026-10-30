@@ -1,0 +1,15 @@
+# Go desktop session owner
+
+`session.Start(ctx, Config{})` is the Linux-guest session boundary. It renders configuration into a **fresh empty** private home, starts Xvfb `:99` at 1280×720 with TCP disabled, waits for a real X display, starts a private non-forking D-Bus session bus, then starts the standard `xfce4-session`. Closing an existing user session or overwriting an existing profile is deliberately not an initialization operation.
+
+Default assets are `/usr/share/sidekicks/desktop`; they are the repository's original Sidekicks wallpaper, icons and GTK styling. Canonical Xfce templates are copied unchanged into this package and embedded. Go renders monitor/wallpaper paths, three fixed Browser/Terminal/Files launchers, keyboard shortcuts, supported logout confirmation, shared terminal appearance, a curated desktop menu and the named-user Xfce panel lock. The lock is UI curation, not a security boundary. No input interception, failed panel guard, Python generator or Node supervisor is used.
+
+`Config.Runner` permits deterministic process-order/failure tests without launching Xfce. Production uses Linux process groups; a manager stops only processes/groups it started, in reverse order. Process logs go to inherited guest stderr. Child environments are explicitly constructed and exclude the agent token and all inherited environment variables. `Env()` returns a copy so other owned GUI launch code can join the same session bus.
+
+`Ready()` rechecks the three supervised process handles and reads the live Linux process tree. It requires exactly one live `xfwm4`, `xfsettingsd`, `xfce4-panel` and `xfdesktop` owned by the current Xfce session's ancestry and UID. Settings runs with `--no-daemon` so its process remains observable in that tree. A stale marker, similarly named unrelated process or zombie does not establish readiness. Closing the browser alone does not terminate the desktop or invalidate this base-session readiness; browser/media readiness belongs to the adapter.
+
+This manager starts no browser, VNC server, Neko server or PulseAudio process. Those are adapter-specific children. A deliberate desktop logout makes current readiness fail; this manager does not silently replace applications or claim a recovered session. The runtime can restart/destroy the disposable workload explicitly.
+
+Normal group cleanup sends TERM then KILL with bounded waits. Arbitrary guest commands that deliberately daemonize into other process groups are outside a process-group supervisor's cleanup guarantee; container/VM lifecycle remains the final isolation/process boundary. Runtime init should reap adopted children. No host bus, display, mount, network setting or persistent daemon is used.
+
+Unit tests cover template provenance, actual rendered XML/launchers, preservation refusal, startup order, cancellation and partial failure cleanup, dynamic readiness, process-tree ownership and real local process-group termination. They do not claim actual Xfce rendering or transport acceptance; independent disposable-container tests are required for those.

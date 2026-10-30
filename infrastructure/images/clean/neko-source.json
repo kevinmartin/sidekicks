@@ -1,0 +1,11 @@
+{
+  "name": "Neko",
+  "version": "3.2.0",
+  "url": "https://codeload.github.com/m1k1o/neko/tar.gz/refs/tags/v3.2.0",
+  "sha256": "3e8a3f7d7f19ed1097b0c28b985894df6c40769ceb6d65cfdffea844026f839d",
+  "license": "Apache-2.0",
+  "sourceEvidence": "The archived POC's exact official source tarball was rehashed read-only; the clean build fetches the same URL and rejects a mismatch.",
+  "toolchain": "Go1.27.3 native Linux CGO plus X11, GTK3 and GStreamer development libraries; the pinned module overlay requires Go1.26.0",
+  "patches": ["The exact module and checksum overlay in infrastructure/images/desktop-neko/upstream-modules replaces upstream go.mod and go.sum; upstream application source is unchanged."],
+  "note": "This Docker image has a normal isolated container network when media is enabled. It does not include the separate loopback-only VZ POC patch or claim VZ support. Browser SDK bundle is a separate npm-lockfile input."
+}
