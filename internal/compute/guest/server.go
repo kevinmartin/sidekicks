@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"strings"
@@ -92,9 +93,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// Guest APIs are not browser endpoints. In particular, an arbitrary web page
 	// must not turn its visitor's local access into authenticated guest operations.
-	if r.Header.Get("Origin") != "" {
-		writeError(w, http.StatusForbidden, "browser origins are not accepted")
-		return
+	for _, origin := range r.Header.Values("Origin") {
+		if origin != "" {
+			writeError(w, http.StatusForbidden, "browser origins are not accepted")
+			return
+		}
 	}
 	auth := r.Header.Get("Authorization")
 	if !strings.HasPrefix(auth, "Bearer ") || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(auth, "Bearer ")), []byte(s.token)) != 1 {
@@ -178,7 +181,8 @@ func method(w http.ResponseWriter, r *http.Request, want string) bool {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	if ct := r.Header.Get("Content-Type"); ct != "application/json" && ct != "application/json; charset=utf-8" {
+	ct, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || !strings.EqualFold(ct, "application/json") {
 		writeError(w, http.StatusUnsupportedMediaType, "application/json required")
 		return false
 	}

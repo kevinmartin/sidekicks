@@ -81,7 +81,7 @@ func TestGenerateCuratedSession(t *testing.T) {
 		t.Fatal("logout/session preservation policy changed")
 	}
 	settingsCommand := session["/sessions/Failsafe/Client1_Command"].Values
-	if len(settingsCommand) != 2 || settingsCommand[1].Value != "--no-daemon" {
+	if len(settingsCommand) != 2 || settingsCommand[0].Value != "xfsettingsd" || settingsCommand[1].Value != "--no-daemon" {
 		t.Fatal("settings process is not owned by session tree")
 	}
 	desktop := flatten(loadChannel(t, filepath.Join(channels, "xfce4-desktop.xml")))
@@ -159,6 +159,37 @@ func TestGenerateRejectsMissingAssetsOrExistingHome(t *testing.T) {
 	}
 	if err := Generate(cfg); err == nil {
 		t.Fatal("configured desktop silently overwritten")
+	}
+}
+
+// TestGenerateRequiresNewPrivateHome verifies existing directories and symlinks are rejected.
+func TestGenerateRequiresNewPrivateHome(t *testing.T) {
+	cfg := testConfig(t)
+	if err := os.Mkdir(cfg.Home, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Generate(cfg); err == nil {
+		t.Fatal("accepted pre-existing empty home")
+	}
+	if err := os.Remove(cfg.Home); err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	if err := os.Symlink(target, cfg.Home); err != nil {
+		t.Fatal(err)
+	}
+	if err := Generate(cfg); err == nil {
+		t.Fatal("accepted symlink home")
+	}
+	if err := os.Remove(cfg.Home); err != nil {
+		t.Fatal(err)
+	}
+	if err := Generate(cfg); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(cfg.Home)
+	if err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("unexpected home mode: %v %v", info, err)
 	}
 }
 

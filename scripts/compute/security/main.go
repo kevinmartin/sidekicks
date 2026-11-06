@@ -203,12 +203,10 @@ func run(ctx context.Context, o options) (runErr error) {
 		return err
 	}
 	if o.mode == "manifest" {
-		if selected != nil {
-			after, inspectErr := inspectImages(ctx, root, o.socket, selected)
-			if inspectErr != nil || !sameImages(images, after) {
-				r.ReleaseGate = "INCOMPLETE_IMAGES_CHANGED"
-				return errors.New("explicit image ids changed or became unavailable during inspection")
-			}
+		after, inspectErr := inspectImages(ctx, root, o.socket, selected)
+		if inspectErr != nil || !sameImages(images, after) {
+			r.ReleaseGate = "INCOMPLETE_IMAGES_CHANGED"
+			return errors.New("image identities changed or became unavailable during inspection")
 		}
 		r.ImagesUnchanged = true
 		r.ReleaseGate = "MANIFEST_ONLY"
@@ -226,10 +224,14 @@ func run(ctx context.Context, o options) (runErr error) {
 		r.Database.Status = "UNAVAILABLE"
 		r.Database.Detail = "Missing/wrong pinned Trivy binary; run make release-tools"
 	} else {
-		_ = os.WriteFile(filepath.Join(out, "trivy-version.txt"), version.stdout, 0600)
+		if err := os.WriteFile(filepath.Join(out, "trivy-version.txt"), version.stdout, 0600); err != nil {
+			return fmt.Errorf("preserve trivy version evidence: %w", err)
+		}
 		cache := filepath.Join(root, ".run/compute-trivy/cache")
 		db := runCommand(ctx, root, 3*time.Minute, 4<<20, trivy, "image", "--cache-dir", cache, "--db-repository", "ghcr.io/aquasecurity/trivy-db:2", "--download-db-only", "--disable-telemetry", "--skip-version-check", "--timeout", "3m")
-		_ = os.WriteFile(filepath.Join(out, "database.log"), append(db.stdout, db.stderr...), 0600)
+		if err := os.WriteFile(filepath.Join(out, "database.log"), append(db.stdout, db.stderr...), 0600); err != nil {
+			return fmt.Errorf("preserve database evidence: %w", err)
+		}
 		if db.err != nil {
 			r.Database.Status = "UNAVAILABLE"
 			r.Database.Detail = "Database refresh failed; old cache was not silently accepted"
@@ -247,7 +249,7 @@ func run(ctx context.Context, o options) (runErr error) {
 			}
 			if r.Database.Status == "COMPLETE" {
 				for _, adapter := range adapters {
-					r.Scans = append(r.Scans, scanImage(ctx, root, out, o.socket, cache, adapter, images[adapter].ID, selected != nil))
+					r.Scans = append(r.Scans, scanImage(ctx, root, out, o.socket, cache, adapter, images[adapter].ID, true))
 				}
 			}
 		}
@@ -404,7 +406,7 @@ func sameImages(a, b map[string]imageRecord) bool {
 	return true
 }
 func sourceHashes(root string, out map[string]string) error {
-	for _, name := range []string{"go.mod", "go.sum", "Makefile", ".dockerignore", "web/package.json", "web/package-lock.json", "infrastructure/images/assets/desktop", "infrastructure/images/clean", "infrastructure/images/desktop-neko/upstream-modules", "cmd", "internal", "web/desktop", "web/embed.go", "web/fixture.html", "scripts/compute"} {
+	for _, name := range []string{"go.mod", "go.sum", "Makefile", ".dockerignore", "web/package.json", "web/package-lock.json", "infrastructure/images/assets/desktop", "infrastructure/images/clean", "infrastructure/images/desktop-neko/upstream-modules", "cmd", "internal", "web/desktop", "web/embed.go", "web/fixture.go", "web/fixture.html", "scripts/compute"} {
 		base := filepath.Join(root, name)
 		err := filepath.WalkDir(base, func(p string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
@@ -503,15 +505,24 @@ func command(parent context.Context, root string, timeout time.Duration, limit i
 	c := exec.CommandContext(ctx, name, args...)
 	c.Dir = root
 	c.WaitDelay = time.Second
-	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + filepath.Join(root, ".run/compute-trivy/home"), "XDG_CONFIG_HOME=" + filepath.Join(root, ".run/compute-trivy/home/config"), "XDG_CACHE_HOME=" + filepath.Join(root, ".run/compute-trivy/home/cache"), "TRIVY_DISABLE_TELEMETRY=true", "DO_NOT_TRACK=1", "LANG=C", "LC_ALL=C", "GOCACHE=" + filepath.Join(root, ".run/compute-go-cache"), "GOPATH=" + filepath.Join(root, ".run/go"), "GOTOOLCHAIN=local", "GOFLAGS=-mod=readonly", "GIT_OPTIONAL_LOCKS=0", "NPM_CONFIG_USERCONFIG=" + filepath.Join(root, ".run/compute-trivy/home/npm-user.conf"), "NPM_CONFIG_GLOBALCONFIG=" + filepath.Join(root, ".run/compute-trivy/home/npm-global.conf"), "NPM_CONFIG_CACHE=" + filepath.Join(root, ".run/compute-npm-cache"), "DOCKER_CONFIG=" + filepath.Join(root, ".run/compute-trivy/docker-config")}
-	_ = os.MkdirAll(filepath.Join(root, ".run/compute-trivy/home"), 0700)
-	_ = os.MkdirAll(filepath.Join(root, ".run/compute-trivy/docker-config"), 0700)
+	configDir, err := os.MkdirTemp("", "sidekicks-audit-config-*")
+	if err != nil {
+		return commandResult{err: err}
+	}
+	defer os.RemoveAll(configDir)
+	if err := os.Mkdir(filepath.Join(configDir, "home"), 0700); err != nil {
+		return commandResult{err: err}
+	}
+	if err := os.Mkdir(filepath.Join(configDir, "docker"), 0700); err != nil {
+		return commandResult{err: err}
+	}
+	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + filepath.Join(configDir, "home"), "XDG_CONFIG_HOME=" + filepath.Join(configDir, "home/config"), "XDG_CACHE_HOME=" + filepath.Join(configDir, "home/cache"), "TRIVY_DISABLE_TELEMETRY=true", "DO_NOT_TRACK=1", "LANG=C", "LC_ALL=C", "GOCACHE=" + filepath.Join(root, ".run/compute-go-cache"), "GOPATH=" + filepath.Join(root, ".run/go"), "GOTOOLCHAIN=local", "GOFLAGS=-mod=readonly", "GIT_OPTIONAL_LOCKS=0", "NPM_CONFIG_USERCONFIG=" + filepath.Join(configDir, "home/npm-user.conf"), "NPM_CONFIG_GLOBALCONFIG=" + filepath.Join(configDir, "home/npm-global.conf"), "NPM_CONFIG_CACHE=" + filepath.Join(root, ".run/compute-npm-cache"), "DOCKER_CONFIG=" + filepath.Join(configDir, "docker")}
 	c.Env = env
 	stdout := limitedBuffer{limit: limit}
 	stderr := limitedBuffer{limit: 1 << 20}
 	c.Stdout = &stdout
 	c.Stderr = &stderr
-	err := c.Run()
+	err = c.Run()
 	if stdout.overflow || stderr.overflow {
 		err = errors.New("verification output exceeded bound")
 	}
@@ -526,8 +537,10 @@ func goAudit(ctx context.Context, root, out string) check {
 		return c
 	}
 	result := runCommand(ctx, root, 3*time.Minute, 16<<20, tool, "-json", "./internal/...", "./cmd/...", "./web/...")
-	_ = os.WriteFile(filepath.Join(out, c.Artifact), result.stdout, 0600)
-	_ = os.WriteFile(filepath.Join(out, "owned-go.log"), result.stderr, 0600)
+	if err := errors.Join(os.WriteFile(filepath.Join(out, c.Artifact), result.stdout, 0600), os.WriteFile(filepath.Join(out, "owned-go.log"), result.stderr, 0600)); err != nil {
+		c.Detail = "Could not preserve Go advisory evidence"
+		return c
+	}
 	count, parseErr := goFindingCount(result.stdout)
 	if parseErr != nil {
 		c.Detail = "Invalid/incomplete Go advisory stream"
@@ -553,6 +566,9 @@ func goFindingCount(b []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+		if event == nil {
+			return 0, errors.New("null advisory event")
+		}
 		events++
 		if len(event["finding"]) > 0 {
 			count++
@@ -566,8 +582,10 @@ func goFindingCount(b []byte) (int, error) {
 func npmAudit(ctx context.Context, root, out string) check {
 	c := check{Status: "UNAVAILABLE", Coverage: "Web lockfile public npm advisory metadata, including development tooling", Artifact: "npm-audit.json"}
 	result := runCommand(ctx, root, 90*time.Second, 16<<20, "npm", "audit", "--json", "--prefix", "web", "--package-lock-only", "--ignore-scripts", "--registry=https://registry.npmjs.org")
-	_ = os.WriteFile(filepath.Join(out, c.Artifact), result.stdout, 0600)
-	_ = os.WriteFile(filepath.Join(out, "npm-audit.log"), result.stderr, 0600)
+	if err := errors.Join(os.WriteFile(filepath.Join(out, c.Artifact), result.stdout, 0600), os.WriteFile(filepath.Join(out, "npm-audit.log"), result.stderr, 0600)); err != nil {
+		c.Detail = "Could not preserve npm advisory evidence"
+		return c
+	}
 	count, err := npmFindingCount(result.stdout)
 	if err != nil {
 		c.Detail = "npm advisory unavailable/invalid, not a clean scan"
@@ -616,7 +634,10 @@ func scanImage(ctx context.Context, root, out, socket, cache, adapter, id string
 			return s
 		}
 	}
-	_ = os.WriteFile(filepath.Join(out, adapter+"-trivy.log"), result.stderr, 0600)
+	if err := os.WriteFile(filepath.Join(out, adapter+"-trivy.log"), result.stderr, 0600); err != nil {
+		s.Check.Detail = "Could not preserve image scan log"
+		return s
+	}
 	if result.err != nil || sanitizeErr != nil {
 		s.Check.Detail = "Image scan failed/timed out; not a clean result"
 		return s

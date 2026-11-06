@@ -51,11 +51,12 @@ export function collectOwnedChild(
     };
     child.stdout.on("data", record("stdout"));
     child.stderr.on("data", record("stderr"));
-    child.once("error", (error) =>
-      finish(
-        Error(`Owned child error: ${error.message}; cleanup is unconfirmed`),
-      ),
-    );
+    child.on("error", (error) => {
+      if (!reason)
+        finish(
+          Error(`Owned child error: ${error.message}; cleanup is unconfirmed`),
+        );
+    });
     child.once("close", (code, signal) => {
       if (reason)
         return finish(

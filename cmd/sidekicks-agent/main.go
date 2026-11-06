@@ -84,11 +84,7 @@ func runMain() error {
 		return fmt.Errorf("invalid agent configuration: %w", err)
 	}
 	defer handler.Close()
-	address := os.Getenv("SIDEKICKS_AGENT_ADDR")
-	if address == "" {
-		address = "127.0.0.1:8080"
-	}
-	listener, err := net.Listen("tcp", address)
+	listener, err := net.Listen("tcp", "127.0.0.1:8080")
 	if err != nil {
 		return errors.New("agent listener failed")
 	}

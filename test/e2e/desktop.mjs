@@ -1875,6 +1875,9 @@ async function run(adapter) {
     if (lifecycleTraces.get(id)?.persistenceFailed)
       cleanup.push("Lifecycle trace persistence failed");
     result.cleanup = cleanup;
+    if (cancellationRequested) {
+      cleanup.push("Supervisor cancellation during cleanup");
+    }
     if (cleanup.length) {
       result.status = "FAIL";
       failed = true;

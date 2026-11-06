@@ -35,6 +35,17 @@ func TestRealGuestX11(t *testing.T) {
 		t.Fatal(err)
 	}
 	backend := driver.current.backend.(*backend)
+	supportedVisual := false
+	for _, depth := range backend.screen.AllowedDepths {
+		for _, visual := range depth.Visuals {
+			if visual.VisualId == backend.screen.RootVisual && depth.Depth == 24 && visual.Class == xproto.VisualClassTrueColor && visual.RedMask == 0xff0000 && visual.GreenMask == 0xff00 && visual.BlueMask == 0xff {
+				supportedVisual = true
+			}
+		}
+	}
+	if !supportedVisual {
+		t.Skip("synthetic color assertion requires a 24-bit RGB TrueColor root visual")
+	}
 	id, err := backend.conn.NewId()
 	if err != nil {
 		t.Fatal(err)

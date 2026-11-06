@@ -103,6 +103,17 @@ func TestDockerShellLifecycle(t *testing.T) {
 		}
 		return r.Status, r.Body
 	}
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		_, _, err = callGuest(ctx, rt, id, "GET", "/health", nil)
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			t.Fatalf("guest readiness: %v", err)
+		}
+		time.Sleep(75 * time.Millisecond)
+	}
 	status, body := invoke("GET", "/health", nil)
 	if status != 200 {
 		t.Fatalf("health %d %s", status, body)

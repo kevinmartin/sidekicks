@@ -293,8 +293,19 @@ type reply struct {
 // other calls on this Page and bounds the whole operation, including queue wait.
 func (p *Page) operation(ctx context.Context) (context.Context, func(), error) {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	if err := ctx.Err(); err != nil {
+		cancel()
+		return ctx, func() {
+		}, err
+	}
 	select {
 	case p.operations <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			<-p.operations
+			cancel()
+			return ctx, func() {
+			}, err
+		}
 		return ctx, func() {
 			<-p.operations
 			cancel()
@@ -310,6 +321,9 @@ func (p *Page) operation(ctx context.Context) (context.Context, func(), error) {
 func (p *Page) call(ctx context.Context, method string, params any, out any) error {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	select {
 	case p.gate <- struct{}{}:
 		defer func() {
@@ -317,6 +331,9 @@ func (p *Page) call(ctx context.Context, method string, params any, out any) err
 		}()
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	p.mu.Lock()
 	closed := p.closed

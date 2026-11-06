@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-func startSite(ctx context.Context, address string, h http.Handler) (func(), error) {
+func startSite(ctx context.Context, address string, h http.Handler) (func(), <-chan struct{}, error) {
 	l, err := net.Listen("tcp", address)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	c, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -27,5 +27,5 @@ func startSite(ctx context.Context, address string, h http.Handler) (func(), err
 		case <-timeout.C:
 			_ = l.Close()
 		}
-	}, nil
+	}, done, nil
 }

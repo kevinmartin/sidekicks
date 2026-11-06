@@ -66,9 +66,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.error(w, http.StatusMethodNotAllowed, "post required")
 		return
 	}
-	if r.Header.Get("Origin") != "" {
-		h.error(w, http.StatusForbidden, "machine api does not accept browser origins")
-		return
+	for _, origin := range r.Header.Values("Origin") {
+		if origin != "" {
+			h.error(w, http.StatusForbidden, "machine api does not accept browser origins")
+			return
+		}
 	}
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || contentType != "application/json" {
@@ -90,7 +92,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var extra any
 	if err = decoder.Decode(&extra); err != io.EOF {
-		h.error(w, http.StatusBadRequest, "one json request required")
+		var limit *http.MaxBytesError
+		if errors.As(err, &limit) {
+			h.error(w, http.StatusRequestEntityTooLarge, "request too large")
+		} else {
+			h.error(w, http.StatusBadRequest, "one json request required")
+		}
 		return
 	}
 	if h.client == nil {

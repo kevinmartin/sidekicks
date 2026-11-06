@@ -64,9 +64,6 @@ func (c *Client) rewriteSignal(data []byte) ([]byte, error) {
 		ports[guest] = host
 	}
 	c.mu.Unlock()
-	if len(ports) == 0 {
-		return data, nil
-	}
 	return rewriteSignalPorts(data, ports)
 }
 func rewriteSignalPorts(data []byte, ports map[uint16]uint16) ([]byte, error) {
@@ -85,6 +82,9 @@ func rewriteSignalPorts(data []byte, ports map[uint16]uint16) ([]byte, error) {
 	case "signal/provide", "signal/offer", "signal/answer", "signal/candidate":
 	default:
 		return data, nil
+	}
+	if len(ports) != mediaCount {
+		return nil, errors.New("neko: complete media allocation required")
 	}
 	var payload map[string]json.RawMessage
 	if json.Unmarshal(envelope["payload"], &payload) != nil || payload == nil {
@@ -230,8 +230,6 @@ func rewriteCandidate(candidate string, ports map[uint16]uint16) (string, error)
 		return "", errors.New("neko: invalid candidate type")
 	}
 	switch strings.ToLower(field(2)) {
-	case "tcp":
-		return candidate, nil
 	case "udp":
 	default:
 		return "", errors.New("neko: unsupported candidate transport")

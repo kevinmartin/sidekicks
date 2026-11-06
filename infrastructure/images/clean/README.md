@@ -9,11 +9,14 @@ Each final target copies the prebuilt Go agent **after** its package and upstrea
 Run from the repository root after Make has built `.run/compute-bin/sidekicks-agent` as a static Linux binary **for the selected Docker platform** and `.run/compute-web/neko.js` from the pinned web npm lockfile. The root Docker context must allow those files, `infrastructure/images/assets/desktop/`, and this directory. For example, after the root build prerequisite:
 
 ```sh
-docker build --target shell -f infrastructure/images/clean/Dockerfile -t sidekicks-compute/shell:clean .
-docker build --target browser-chromium -f infrastructure/images/clean/Dockerfile -t sidekicks-compute/browser-chromium:clean .
-docker build --target desktop-novnc -f infrastructure/images/clean/Dockerfile -t sidekicks-compute/desktop-novnc:clean .
-docker build --target desktop-neko -f infrastructure/images/clean/Dockerfile -t sidekicks-compute/desktop-neko:clean .
+make build IMAGE_ARCH=arm64
+docker build --platform linux/arm64 --target shell -f infrastructure/images/clean/Dockerfile -t sidekicks-compute/shell:clean .
+docker build --platform linux/arm64 --target browser-chromium -f infrastructure/images/clean/Dockerfile -t sidekicks-compute/browser-chromium:clean .
+docker build --platform linux/arm64 --target desktop-novnc -f infrastructure/images/clean/Dockerfile -t sidekicks-compute/desktop-novnc:clean .
+docker build --platform linux/arm64 --target desktop-neko -f infrastructure/images/clean/Dockerfile -t sidekicks-compute/desktop-neko:clean .
 ```
+
+For amd64, select `IMAGE_ARCH=amd64` and use `--platform linux/amd64` consistently for each build. The agent architecture must match the selected image platform.
 
 The coordinator completed clean builds on Linux ARM64; runtime acceptance remains separately recorded in the current compute evidence. Recipe presence alone is not a portability or all-runtime acceptance claim. The coordinator owns build sequencing and verification; no existing demo is replaced by these commands. All original recipes remain unchanged.
 

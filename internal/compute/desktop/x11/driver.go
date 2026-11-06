@@ -236,6 +236,8 @@ func (d *Driver) Input(ctx context.Context, event desktop.Event) error {
 							return err
 						}
 						d.autoShift[symbol] = shift.Code
+					} else if len(d.autoShift) > 0 {
+						d.autoShift[symbol] = shift.Code
 					}
 				}
 				if err := fake(xproto.KeyPress, stroke.Code, 0, 0); err != nil {
@@ -246,10 +248,12 @@ func (d *Driver) Input(ctx context.Context, event desktop.Event) error {
 					return err
 				}
 				if shift, ok := d.autoShift[symbol]; ok {
-					if err := fake(xproto.KeyRelease, shift, 0, 0); err != nil {
-						return err
-					}
 					delete(d.autoShift, symbol)
+					if len(d.autoShift) == 0 {
+						if err := fake(xproto.KeyRelease, shift, 0, 0); err != nil {
+							return err
+						}
+					}
 				}
 			}
 			// An explicit Shift command owns its modifier independently of a

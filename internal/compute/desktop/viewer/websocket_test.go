@@ -95,6 +95,41 @@ func TestObserverStreamDisconnectReleasesLaterAcquiredLease(t *testing.T) {
 	}
 }
 
+// TestRFBDisconnectPreservesNativeLease verifies a video disconnect cannot revoke native control.
+func TestRFBDisconnectPreservesNativeLease(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	service, gate, _ := setup(t, func(c *Config) {
+		c.RFBTarget = listener.Addr().String()
+		c.NativeViewerID = func(string) (string, error) {
+			return "native-viewer", nil
+		}
+	})
+	cookie := authenticate(t, service)
+	server := httptest.NewServer(service)
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn := openRFBForTest(t, ctx, server, cookie, listener)
+	w := request(service, http.MethodPost, "/control", `{"action":"acquire","mode":"native"}`, cookie)
+	if w.Code != http.StatusOK {
+		t.Fatal(w.Body.String())
+	}
+	epoch := state(t, w).Epoch
+	_ = conn.CloseNow()
+	waitViewerStreamClosed(t, service, cookie)
+	if gate.View().Mode != control.Native {
+		t.Fatal("RFB disconnect revoked native ownership")
+	}
+	w = epochRequest(service, "/control", `{"action":"release"}`, cookie, strconv.FormatUint(epoch, 10))
+	if w.Code != http.StatusOK || gate.View().Owner != "" {
+		t.Fatalf("native owner could not release its lease: %d %s", w.Code, w.Body.String())
+	}
+}
+
 type blockingReleaseGate struct {
 	Gate
 	entered, proceed chan struct{}

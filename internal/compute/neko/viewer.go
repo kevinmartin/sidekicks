@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/coder/websocket"
@@ -196,7 +195,12 @@ func (c *Client) RelaySignaling(ctx context.Context, session string, downstream 
 	return errors.New("neko: signaling connection ended or event denied")
 }
 func allowedViewerEvent(event string) bool {
-	return (strings.HasPrefix(event, "signal/") && len(event) > len("signal/") && len(event) <= 128) || event == "client/heartbeat" || event == "system/heartbeat"
+	switch event {
+	case "signal/request", "signal/provide", "signal/offer", "signal/answer", "signal/candidate", "signal/restart", "signal/close", "client/heartbeat", "system/heartbeat":
+		return true
+	default:
+		return false
+	}
 }
 
 // ViewerID resolves only an actually connected viewer for native lease transfer.

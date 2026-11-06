@@ -137,6 +137,27 @@ func assertClear(t *testing.T, f *fakeBackend) {
 	}
 }
 
+// TestAutomaticShiftRemainsHeldForOverlappingKeys verifies shared modifier ownership.
+func TestAutomaticShiftRemainsHeldForOverlappingKeys(t *testing.T) {
+	f := newFakeBackend()
+	f.mapping['+'] = Stroke{Code: 21, Shift: true}
+	f.mapping['-'] = Stroke{Code: 20, Shift: true}
+	d := New(f)
+	for _, event := range []desktop.Event{{Type: "key", Key: "+", Action: "down"}, {Type: "key", Key: "-", Action: "down"}, {Type: "key", Key: "+", Action: "up"}} {
+		if err := d.Input(context.Background(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := f.State()
+	if err != nil || state.Keys[50/8]&(1<<uint(50%8)) == 0 {
+		t.Fatal("shift released while another shifted key remains held")
+	}
+	if err := d.Input(context.Background(), desktop.Event{Type: "key", Key: "-", Action: "up"}); err != nil {
+		t.Fatal(err)
+	}
+	assertClear(t, f)
+}
+
 // TestResetUsesActualServerStateAndAllSupportedButtons verifies reset uses actual server state and all supported buttons.
 func TestResetUsesActualServerStateAndAllSupportedButtons(t *testing.T) {
 	f := newFakeBackend()

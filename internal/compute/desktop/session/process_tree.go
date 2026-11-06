@@ -65,7 +65,7 @@ func parseProcessState(pid int, raw string) (processState, error) {
 		}
 		switch fields[0] {
 		case "Name":
-			result.name = values[0]
+			result.name = strings.TrimSpace(fields[1])
 		case "State":
 			result.state = values[0]
 		case "PPid":
@@ -79,15 +79,18 @@ func parseProcessState(pid int, raw string) (processState, error) {
 	}
 	return result, nil
 }
+func processLive(state string) bool {
+	return state != "Z" && state != "T" && state != "t" && state != "X" && state != "x"
+}
 func checkComponents(states map[int]processState, root, uid int, names []string) error {
 	parent, ok := states[root]
-	if !ok || parent.name != "xfce4-session" || parent.uid != uid || parent.state == "Z" {
+	if !ok || parent.name != "xfce4-session" || parent.uid != uid || !processLive(parent.state) {
 		return errors.New("owned xfce session is not live")
 	}
 	for _, name := range names {
 		count := 0
 		for pid, state := range states {
-			if state.name != name || state.uid != uid || state.state == "Z" {
+			if state.name != name || state.uid != uid || !processLive(state.state) {
 				continue
 			}
 			seen := map[int]bool{}

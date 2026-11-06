@@ -161,6 +161,11 @@ func TestCanceledDoubleClickCannotEmitQueuedSecondClick(t *testing.T) {
 		t.Fatal("first click never completed")
 	}
 	cancel()
+	select {
+	case <-backend.closed:
+	case <-time.After(time.Second):
+		t.Fatal("backend was not closed after cancellation")
+	}
 	close(backend.proceed)
 	select {
 	case err := <-done:

@@ -130,8 +130,9 @@ type Launcher struct {
 const pendingGrace = 15 * time.Second
 
 type marker struct {
-	PID     int       `json:"pid"`
-	Started time.Time `json:"started"`
+	PID      int       `json:"pid"`
+	Started  time.Time `json:"started"`
+	Identity string    `json:"identity,omitempty"`
 }
 
 // New constructs a managed desktop application launcher.
@@ -273,7 +274,11 @@ func (l *Launcher) readMarker(app App) (marker, bool, error) {
 	return m, true, nil
 }
 func (l *Launcher) writeMarker(app App, p Process) error {
-	data, _ := json.Marshal(marker{p.PID, time.Now()})
+	identity, err := processIdentity(p.PID)
+	if err != nil {
+		return err
+	}
+	data, _ := json.Marshal(marker{PID: p.PID, Started: time.Now(), Identity: identity})
 	tmp, err := os.CreateTemp(l.lockDir, ".pending-*")
 	if err != nil {
 		return err
@@ -321,7 +326,11 @@ func (l *Launcher) Launch(ctx context.Context, app App) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: launch lock", ErrUnavailable)
 	}
-	defer unlock()
+	defer func() {
+		if unlock != nil {
+			unlock()
+		}
+	}()
 	if w, found, err := l.find(ctx, app); err != nil {
 		return Result{}, fmt.Errorf("%w: window enumeration", ErrUnavailable)
 	} else if found {
@@ -358,7 +367,8 @@ func (l *Launcher) Launch(ctx context.Context, app App) (Result, error) {
 	if previous, found, e := l.readMarker(app); e != nil {
 		return Result{}, fmt.Errorf("%w: invalid pending launch record", ErrUnavailable)
 	} else if found {
-		if processAlive(previous.PID) || time.Since(previous.Started) < pendingGrace {
+		identity, identityErr := processIdentity(previous.PID)
+		if (identityErr == nil && previous.Identity != "" && identity == previous.Identity) || time.Since(previous.Started) < pendingGrace {
 			result.State = "launching"
 			result.PID = previous.PID
 			return result, nil
@@ -381,6 +391,13 @@ func (l *Launcher) Launch(ctx context.Context, app App) (Result, error) {
 	state.exited = false
 	state.exitErr = nil
 	if err = l.writeMarker(app, process); err != nil {
+		// Keep the cross-process lock until the child has mapped a window or
+		// exited and its delegation grace period has elapsed. Without the
+		// marker, releasing the lock here could spawn a second application.
+		release := unlock
+		unlock = nil
+		state.process = nil
+		go l.releaseUnrecordedLaunch(app, process, release)
 		return Result{}, fmt.Errorf("%w: pending launch record", ErrUnavailable)
 	}
 	timer := time.NewTimer(l.cfg.LaunchTimeout)
@@ -417,6 +434,30 @@ func (l *Launcher) Launch(ctx context.Context, app App) (Result, error) {
 			// waiting for the actual managed window, without spawning a second copy.
 			process.Done = nil
 		case <-ticker.C:
+		}
+	}
+}
+
+func (l *Launcher) releaseUnrecordedLaunch(app App, process Process, release func()) {
+	defer release()
+	tick := time.NewTicker(l.cfg.PollInterval)
+	defer tick.Stop()
+	var grace <-chan time.Time
+	done := process.Done
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, found, err := l.find(ctx, app)
+		cancel()
+		if err == nil && found {
+			return
+		}
+		select {
+		case <-done:
+			done = nil
+			grace = time.After(pendingGrace)
+		case <-grace:
+			return
+		case <-tick.C:
 		}
 	}
 }

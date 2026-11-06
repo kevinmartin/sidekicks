@@ -93,7 +93,7 @@ func (r *Runtime) InvokeWithInstance(ctx context.Context, id string, build func(
 	verify := func() error {
 		current, err := r.inspectOwned(ctx, id)
 		if err != nil {
-			return fmt.Errorf("%w: cannot verify container generation: %v", compute.ErrConflict, err)
+			return fmt.Errorf("%w: cannot verify container generation: %w", compute.ErrConflict, err)
 		}
 		latest, err := instance(current, id)
 		if err != nil || current.ID != initial.ID || current.State.Status != "running" || current.State.StartedAt != initial.State.StartedAt || !reflect.DeepEqual(observed, latest) {

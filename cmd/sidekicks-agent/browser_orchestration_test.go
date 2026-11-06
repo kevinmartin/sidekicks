@@ -24,7 +24,7 @@ func browserUnitDeps(t *testing.T, script string) (browserDependencies, *atomic.
 	var command *exec.Cmd
 	var args []string
 	deps := browserDependencies{
-		startSite: func(_ context.Context, address string, handler http.Handler) (func(), error) {
+		startSite: func(_ context.Context, address string, handler http.Handler) (func(), <-chan struct{}, error) {
 			if address != "127.0.0.1:8081" {
 				t.Fatal("fixture bound outside private guest address")
 			}
@@ -37,7 +37,7 @@ func browserUnitDeps(t *testing.T, script string) (browserDependencies, *atomic.
 			}
 			return func() {
 				stops.Add(1)
-			}, nil
+			}, make(chan struct{}), nil
 		},
 		command: func(ctx context.Context, path string, argv ...string) *exec.Cmd {
 			if path != "/usr/bin/chromium" {
@@ -124,8 +124,8 @@ func TestBrowserBootstrapFailuresCloseOnlyOwnedSiteAndChild(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	deps, _, stops, _, _ := browserUnitDeps(t, "sleep 30")
-	deps.startSite = func(context.Context, string, http.Handler) (func(), error) {
-		return nil, errors.New("fixture listener unavailable")
+	deps.startSite = func(context.Context, string, http.Handler) (func(), <-chan struct{}, error) {
+		return nil, nil, errors.New("fixture listener unavailable")
 	}
 	if _, _, _, err := prepareBrowserWith(ctx, false, deps); err == nil || stops.Load() != 0 {
 		t.Fatal("failed site boot accepted")

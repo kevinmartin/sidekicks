@@ -182,6 +182,28 @@ func TestBindMissingTicketRejectsWithoutRevokingHuman(t *testing.T) {
 	finishSDK(t, ws, finished)
 }
 
+// TestBindExpiredTicketRejectsWithoutRevokingHuman verifies expired capabilities cannot bind control.
+func TestBindExpiredTicketRejectsWithoutRevokingHuman(t *testing.T) {
+	h, _ := handlerSetup(t, false)
+	ticket, ws, finished := boundSDKConnection(t, h, "public")
+	lease, err := h.gate.Acquire(context.Background(), control.Request{Owner: control.Human, Session: "public", Duration: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.mu.Lock()
+	value := h.tickets[ticket.Token]
+	value.Expires = time.Now().Add(-time.Second)
+	h.tickets[ticket.Token] = value
+	h.mu.Unlock()
+	if h.BindLease("public", lease) == nil {
+		t.Fatal("expired ticket accepted")
+	}
+	if err := h.gate.Release(context.Background(), control.Credentials{Session: "public", Token: lease.Token}); err != nil {
+		t.Fatal(err)
+	}
+	finishSDK(t, ws, finished)
+}
+
 // TestControllerDisconnectImmediatelyFencesUnissuedAgentDispatch verifies controller disconnect immediately fences unissued agent dispatch.
 func TestControllerDisconnectImmediatelyFencesUnissuedAgentDispatch(t *testing.T) {
 	h, f := handlerSetup(t, false)

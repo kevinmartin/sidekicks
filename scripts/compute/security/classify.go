@@ -51,22 +51,57 @@ func classifyDirectory(root, name string) error {
 	if name == "" || err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return errors.New("classify requires existing evidence directory beneath artifacts/compute/release")
 	}
-	raw, err := os.ReadFile(filepath.Join(abs, "report.json"))
+	repositoryRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer repositoryRoot.Close()
+	releaseRoot, err := repositoryRoot.OpenRoot("artifacts/compute/release")
+	if err != nil {
+		return errors.New("invalid release evidence root")
+	}
+	defer releaseRoot.Close()
+	evidence, err := releaseRoot.OpenRoot(rel)
+	if err != nil {
+		return errors.New("invalid release evidence directory")
+	}
+	defer evidence.Close()
+	raw, err := evidence.ReadFile("report.json")
 	if err != nil {
 		return err
 	}
 	var source report
-	if json.Unmarshal(raw, &source) != nil || len(source.Images) != 4 {
+	if json.Unmarshal(raw, &source) != nil || source.Mode != "verify" || !source.ImagesUnchanged || source.Database.Status != "COMPLETE" || len(source.Images) != len(adapters) || len(source.Scans) != len(adapters) {
 		return errors.New("invalid original release report")
+	}
+	seen := make(map[string]bool, len(adapters))
+	seenIDs := make(map[string]bool, len(adapters))
+	for _, scan := range source.Scans {
+		image, ok := source.Images[scan.Adapter]
+		if !ok || seen[scan.Adapter] || seenIDs[image.ID] || !imagePattern.MatchString(image.ID) || scan.ImageID != image.ID || scan.ObservedImageID != image.ID || scan.Check.Status != "COMPLETE" || scan.OS.Status != "COMPLETE" || scan.Check.Artifact != scan.Adapter+"-trivy.json" || (scan.Adapter == "desktop-neko" && scan.UpstreamNeko.Status != "COMPLETE") {
+			return errors.New("incomplete or mismatched image scan evidence")
+		}
+		seen[scan.Adapter] = true
+		seenIDs[image.ID] = true
 	}
 	inputs := map[string][]byte{}
 	for _, a := range adapters {
-		b, e := os.ReadFile(filepath.Join(abs, a+"-trivy.json"))
+		if !seen[a] {
+			return errors.New("required image scan is missing")
+		}
+		b, e := evidence.ReadFile(a + "-trivy.json")
 		if e != nil {
 			return e
 		}
 		if len(b) > 32<<20 {
 			return errors.New("oversized scanner evidence")
+		}
+		var identity struct {
+			ArtifactName string
+			Metadata     struct{ ImageID string }
+		}
+		if json.Unmarshal(b, &identity) != nil || identity.ArtifactName != source.Images[a].ID || identity.Metadata.ImageID != source.Images[a].ID {
+			return errors.New("raw scanner evidence does not match selected image")
 		}
 		inputs[a] = b
 	}
@@ -74,7 +109,7 @@ func classifyDirectory(root, name string) error {
 	if err != nil {
 		return err
 	}
-	output, err := os.OpenFile(filepath.Join(abs, "high-critical-classification.json"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	output, err := evidence.OpenFile("high-critical-classification.json", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return errors.New("refusing to overwrite existing classification")
 	}

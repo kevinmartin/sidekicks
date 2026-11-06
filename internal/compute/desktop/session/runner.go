@@ -67,15 +67,21 @@ func (systemRunner) Start(ctx context.Context, c Command) (Process, error) {
 	return startOwned(ctx, c)
 }
 func startOwned(ctx context.Context, c Command) (Process, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(c.Argv) == 0 {
 		return nil, errors.New("desktop command is empty")
 	}
 	cmd := exec.Command(c.Argv[0], c.Argv[1:]...)
-	cmd.Env = append([]string(nil), c.Env...)
+	cmd.Env = append([]string{}, c.Env...)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	cmd.WaitDelay = time.Second
 	setProcessGroup(cmd)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
@@ -100,7 +106,7 @@ func (systemRunner) Probe(ctx context.Context, c Command) error {
 		return errors.New("desktop probe is empty")
 	}
 	cmd := exec.CommandContext(ctx, c.Argv[0], c.Argv[1:]...)
-	cmd.Env = append([]string(nil), c.Env...)
+	cmd.Env = append([]string{}, c.Env...)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	cmd.WaitDelay = 100 * time.Millisecond

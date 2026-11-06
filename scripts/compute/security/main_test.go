@@ -18,7 +18,7 @@ func TestParsersAndRedaction(t *testing.T) {
 		raw  string
 		want int
 		ok   bool
-	}{{`{"config":{}}`, 0, true}, {"{\"config\":{}}\n{\"finding\":{\"osv\":\"GO-123\"}}", 1, true}, {``, 0, false}, {`broken`, 0, false}} {
+	}{{`{"config":{}}`, 0, true}, {"{\"config\":{}}\n{\"finding\":{\"osv\":\"GO-123\"}}", 1, true}, {`null`, 0, false}, {``, 0, false}, {`broken`, 0, false}} {
 		n, e := goFindingCount([]byte(tt.raw))
 		if (e == nil) != tt.ok || n != tt.want {
 			t.Fatalf("Go parse %q=%d,%v", tt.raw, n, e)
@@ -83,7 +83,7 @@ func TestEvidenceAndBoundedChildEnvironment(t *testing.T) {
 		t.Fatal(result.err)
 	}
 	env := string(result.stdout)
-	if strings.Contains(env, "private-test-credential") || !strings.Contains(env, "HOME="+filepath.Join(root, ".run/compute-trivy/home")) || !strings.Contains(env, "TRIVY_DISABLE_TELEMETRY=true") {
+	if strings.Contains(env, "private-test-credential") || !strings.Contains(env, "sidekicks-audit-config-") || strings.Contains(env, filepath.Join(root, ".run/compute-trivy/home")) || !strings.Contains(env, "TRIVY_DISABLE_TELEMETRY=true") {
 		t.Fatal("child environment not isolated")
 	}
 	result = command(context.Background(), root, time.Second, 2, "/bin/sh", "-c", "printf 'large-output'")
@@ -98,7 +98,7 @@ func fixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	t.Chdir(root)
-	for _, p := range []string{"go.mod", "go.sum", "Makefile", ".dockerignore", "web/package.json", "web/package-lock.json", "infrastructure/images/assets/desktop/wallpaper.png", "web/embed.go", "web/fixture.html", "infrastructure/images/clean/Dockerfile", "infrastructure/images/desktop-neko/upstream-modules/go.mod", "infrastructure/images/desktop-neko/upstream-modules/go.sum", "infrastructure/images/desktop-neko/upstream-modules/manifest.json", "infrastructure/images/desktop-neko/upstream-modules/README.md", "cmd/a.go", "internal/a.go", "web/desktop/a.mjs", "scripts/compute/a.sh"} {
+	for _, p := range []string{"go.mod", "go.sum", "Makefile", ".dockerignore", "web/package.json", "web/package-lock.json", "infrastructure/images/assets/desktop/wallpaper.png", "web/embed.go", "web/fixture.go", "web/fixture.html", "infrastructure/images/clean/Dockerfile", "infrastructure/images/desktop-neko/upstream-modules/go.mod", "infrastructure/images/desktop-neko/upstream-modules/go.sum", "infrastructure/images/desktop-neko/upstream-modules/manifest.json", "infrastructure/images/desktop-neko/upstream-modules/README.md", "cmd/a.go", "internal/a.go", "web/desktop/a.mjs", "scripts/compute/a.sh"} {
 		p = filepath.Join(root, p)
 		if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {
 			t.Fatal(e)
@@ -224,7 +224,7 @@ func fakeChecks(t *testing.T, root, variant string) {
 			if variant == "os-finding" {
 				finding = `,"Vulnerabilities":[{"Severity":"HIGH"}]`
 			}
-			return commandResult{stdout: []byte(`{"Metadata":{"ImageConfig":{"Env":["private-value"]}},"Results":[{"Target":"debian","Class":"os-pkgs","Type":"debian","Packages":[{}]` + finding + `}` + neko + `]}`)}
+			return commandResult{stdout: []byte(`{"ArtifactName":"` + id + `","Metadata":{"ImageID":"` + id + `","ImageConfig":{"Env":["private-value"]}},"Results":[{"Target":"debian","Class":"os-pkgs","Type":"debian","Packages":[{}]` + finding + `}` + neko + `]}`)}
 		default:
 			t.Fatal("unexpected command", name, args)
 			return commandResult{}

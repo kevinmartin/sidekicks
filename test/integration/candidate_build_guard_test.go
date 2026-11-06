@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -160,13 +161,15 @@ func TestCandidateBuildCreatesOnlyUniqueTagsAndImmutableManifest(t *testing.T) {
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Status != "built-not-verified" || manifest.RunID != candidateFixtureRun || manifest.Architecture != "arm64" || len(manifest.GitRevision) != 40 || len(manifest.SourceFingerprintSHA256) != 64 || len(manifest.Images) != 4 {
+	if manifest.Status != "built-not-verified" || manifest.RunID != candidateFixtureRun || manifest.Architecture != "arm64" || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(manifest.GitRevision) || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(manifest.SourceFingerprintSHA256) || len(manifest.Images) != 4 {
 		t.Fatalf("invalid manifest: %+v", manifest)
 	}
+	wanted := map[string]bool{"shell": true, "browser-chromium": true, "desktop-novnc": true, "desktop-neko": true}
 	for _, image := range manifest.Images {
-		if !strings.HasPrefix(image.Tag, "sidekicks-compute/"+image.Adapter+":verify-") || len(image.ID) != len("sha256:")+64 {
+		if !wanted[image.Adapter] || image.Tag != "sidekicks-compute/"+image.Adapter+":verify-"+candidateFixtureRun || !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(image.ID) {
 			t.Fatalf("invalid image identity: %+v", image)
 		}
+		delete(wanted, image.Adapter)
 	}
 	trace, err := os.ReadFile(filepath.Join(root, "docker-trace"))
 	if err != nil {

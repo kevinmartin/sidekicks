@@ -69,7 +69,7 @@ func TestMediaAllocationValidationAndImmutability(t *testing.T) {
 // TestSignalRewriteOnlyExactCandidatePortFields verifies signal rewrite only exact candidate port fields.
 func TestSignalRewriteOnlyExactCandidatePortFields(t *testing.T) {
 	ports := allocation(45000)
-	sdp := "v=0\r\ns=Session candidate:label\r\nc=IN IP4 0.0.0.0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtcp:60020 IN IP4 127.0.0.1\r\na=candidate:one 1 udp 12345 127.0.0.1 60020 typ host generation 0 ufrag 60020\r\na=candidate:two\t1 UDP 333 127.0.0.1 60039 typ srflx raddr 0.0.0.0 rport 0\r\na=candidate:tcp 1 tcp 123 127.0.0.1 60020 typ host tcptype passive\r\na=end-of-candidates\r\n"
+	sdp := "v=0\r\ns=Session candidate:label\r\nc=IN IP4 0.0.0.0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtcp:60020 IN IP4 127.0.0.1\r\na=candidate:one 1 udp 12345 127.0.0.1 60020 typ host generation 0 ufrag 60020\r\na=candidate:two\t1 UDP 333 127.0.0.1 60039 typ srflx raddr 0.0.0.0 rport 0\r\na=end-of-candidates\r\n"
 	raw, _ := json.Marshal(map[string]any{"event": "signal/provide", "payload": map[string]any{"sdp": sdp, "iceservers": []map[string]string{{"urls": "stun:127.0.0.1:9"}}, "unrelated": "candidate:x 1 udp 1 127.0.0.1 60020 typ host"}, "other": map[string]any{"port": 60020}})
 	rewritten, err := rewriteSignalPorts(raw, ports)
 	if err != nil {
@@ -109,7 +109,11 @@ func TestSignalRewriteOnlyExactCandidatePortFields(t *testing.T) {
 // TestSignalMalformedAndUnexpectedDestinationsFailClosed verifies signal malformed and unexpected destinations fail closed.
 func TestSignalMalformedAndUnexpectedDestinationsFailClosed(t *testing.T) {
 	ports := allocation(45000)
+	if _, err := rewriteSignalPorts([]byte(`{"event":"signal/candidate","payload":{"candidate":"candidate:x 1 udp 1 127.0.0.1 60020 typ host"}}`), nil); err == nil {
+		t.Fatal("accepted candidate without media allocation")
+	}
 	for _, candidate := range []string{
+		"candidate:tcp 1 tcp 123 127.0.0.1 60020 typ host tcptype passive",
 		"candidate: 1 udp 1 127.0.0.1 60020 typ host", "candidate:x 0 udp 1 127.0.0.1 60020 typ host", "candidate:x 1 udp bad 127.0.0.1 60020 typ host", "candidate:x 1 udp 1 127.0.0.1 0 typ host", "candidate:x 1 udp 1 127.0.0.1 65536 typ host", "candidate:x 1 udp 1 127.0.0.1 60019 typ host", "candidate:x 1 udp 1 172.17.0.2 60020 typ host", "candidate:x 1 udp 1 ::1 60020 typ host", "candidate:x 1 udp 1 127.0.0.1 60020 what host", "candidate:x 1 udp 1 127.0.0.1 60020 typ evil", "candidate:x 1 sctp 1 127.0.0.1 60020 typ host", "candidate:x 1 udp 1 127.0.0.1 60020 typ host\r\na=evil", " candidate:x 1 udp 1 127.0.0.1 60020 typ host", strings.Repeat("x", 4097),
 	} {
 		if _, err := rewriteCandidate(candidate, ports); err == nil {

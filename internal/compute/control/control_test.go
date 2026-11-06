@@ -668,6 +668,43 @@ func TestStopDuringNativeTransferRetakesBeforeAcknowledging(t *testing.T) {
 	}
 }
 
+// TestStopCancelsPendingNativeTransfer verifies revocation interrupts an in-flight transfer.
+func TestStopCancelsPendingNativeTransfer(t *testing.T) {
+	entered := make(chan struct{})
+	d := &nativeDriver{giveFn: func(ctx context.Context, _ string) error {
+		close(entered)
+		<-ctx.Done()
+		return ctx.Err()
+	}}
+	m := New(d)
+	defer m.Close(context.Background())
+	r := req(Human, "human")
+	r.Mode, r.ViewerID = Native, "viewer"
+	done := make(chan error, 1)
+	go func() {
+		_, err := m.Acquire(context.Background(), r)
+		done <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("native transfer did not begin")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := m.Stop(ctx); err != nil {
+		t.Fatalf("stop did not cancel the transfer: %v", err)
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrConflict) {
+			t.Fatalf("revoked acquisition: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("revoked acquisition did not finish")
+	}
+}
+
 // TestRealExpiryTimerHonorsRenewedDeadline verifies that the expiry timer honors the renewed deadline.
 func TestRealExpiryTimerHonorsRenewedDeadline(t *testing.T) {
 	d := &fakeDriver{}

@@ -515,7 +515,7 @@ func (h *Handler) BindLease(session string, lease control.Lease) error {
 	}
 	var ticketKey string
 	for key, ticket := range h.tickets {
-		if ticket.Viewer.Session == session && ticket.Viewer.reservation == viewer.reservation && ticket.Viewer.ID == viewer.ID {
+		if time.Now().Before(ticket.Expires) && ticket.Viewer.Session == session && ticket.Viewer.reservation == viewer.reservation && ticket.Viewer.ID == viewer.ID {
 			ticketKey = key
 			break
 		}

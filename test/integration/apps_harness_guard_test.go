@@ -208,12 +208,11 @@ func TestAppsLifecycleMutationGuardCannotTargetForeignOrOccupiedGuest(t *testing
 // TestAppsLifecycleExecutionPlanHasFixedUserDisplayAndExactTest verifies apps lifecycle execution plan has fixed user display and exact test.
 func TestAppsLifecycleExecutionPlanHasFixedUserDisplayAndExactTest(t *testing.T) {
 	args := appsExecArgs(strings.Repeat("c", 64), "firefox")
-	joined := strings.Join(args, " ")
-	for _, required := range []string{"--user 1000:1000", "--workdir /workspace", "SIDEKICKS_APPS_TEST_DISPLAY=:99", "SIDEKICKS_APPS_TEST_BROWSER=firefox", "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/sidekicks-home/.run/session-bus", "-test.run=^TestRealGuestApps$", "-test.timeout=150s"} {
-		if !strings.Contains(joined, required) {
-			t.Fatal("lifecycle test lost its fixed scope", required)
-		}
+	want := []string{"exec", "--user", "1000:1000", "--workdir", "/workspace", "-e", "HOME=/tmp/sidekicks-home", "-e", "DISPLAY=:99", "-e", "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/sidekicks-home/.run/session-bus", "-e", "SIDEKICKS_APPS_TEST_DISPLAY=:99", "-e", "SIDEKICKS_APPS_TEST_HOME=/tmp/sidekicks-home", "-e", "SIDEKICKS_APPS_TEST_HOME_URL=http://127.0.0.1:8081/home", "-e", "SIDEKICKS_APPS_TEST_TITLE=Sidekicks", "-e", "SIDEKICKS_APPS_TEST_BROWSER=firefox", strings.Repeat("c", 64), appsGuestBinary, "-test.run=^TestRealGuestApps$", "-test.v", "-test.timeout=150s", "-test.coverprofile=/workspace/apps.cover"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("unexpected lifecycle execution arguments: %q", args)
 	}
+	joined := strings.Join(args, " ")
 	if strings.Contains(joined, "--privileged") || strings.Contains(joined, "docker.sock") || strings.Contains(joined, "--no-sandbox") {
 		t.Fatal("harness weakened workload isolation")
 	}

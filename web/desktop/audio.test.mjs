@@ -28,19 +28,29 @@ function fakeChild() {
   return child;
 }
 test("owned process group is accepted only on explicit ESRCH", () => {
-  const gone = () => {
+  const gone = (pid, signal) => {
+    assert.equal(pid, -123);
+    assert.equal(signal, 0);
     const error = Error("gone");
     error.code = "ESRCH";
     throw error;
   };
-  const denied = () => {
+  const denied = (pid, signal) => {
+    assert.equal(pid, -123);
+    assert.equal(signal, 0);
     const error = Error("denied");
     error.code = "EPERM";
     throw error;
   };
   assert.equal(inspectOwnedProcessGroup(123, "darwin", gone).absent, true);
   assert.equal(inspectOwnedProcessGroup(123, "darwin", denied).absent, false);
-  assert.equal(inspectOwnedProcessGroup(123, "darwin", () => {}).absent, false);
+  assert.equal(
+    inspectOwnedProcessGroup(123, "darwin", (pid, signal) => {
+      assert.equal(pid, -123);
+      assert.equal(signal, 0);
+    }).absent,
+    false,
+  );
   assert.equal(inspectOwnedProcessGroup(0, "darwin", gone).absent, false);
   assert.equal(inspectOwnedProcessGroup(123, "win32", gone).absent, false);
 });
@@ -211,6 +221,23 @@ test("deadline remains a failure even if child subsequently closes", async () =>
   setTimeout(() => child.emit("close", 0, null), 30);
   await assert.rejects(result, /deadline.*cleanup is unconfirmed/);
   assert.deepEqual(child.signals, ["SIGTERM"]);
+});
+test("kill errors during cancellation do not suppress forced termination", async () => {
+  const child = fakeChild();
+  child.kill = (signal) => {
+    child.signals.push(signal);
+    child.emit("error", Error("kill failed"));
+  };
+  const result = collectOwnedChild(child, {
+    deadlineMs: 10,
+    graceMs: 10,
+    killWaitMs: 10,
+  });
+  await assert.rejects(
+    result,
+    /deadline.*termination and cleanup are unconfirmed/,
+  );
+  assert.deepEqual(child.signals, ["SIGTERM", "SIGKILL"]);
 });
 test("oversized child output requests cleanup and cannot pass", async () => {
   const child = fakeChild();

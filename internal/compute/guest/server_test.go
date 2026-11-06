@@ -95,6 +95,28 @@ func TestConfigurationAndAuth(t *testing.T) {
 	}
 }
 
+// TestOriginAndJSONMediaTypeBoundaries verifies duplicate origins and valid JSON parameters.
+func TestOriginAndJSONMediaTypeBoundaries(t *testing.T) {
+	s, _ := newServer(t)
+	r := httptest.NewRequest(http.MethodGet, "/health", nil)
+	r.Header.Set("Authorization", "Bearer "+testToken)
+	r.Header.Add("Origin", "")
+	r.Header.Add("Origin", "https://example.com")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("multiple Origin headers accepted: %d", w.Code)
+	}
+	r = httptest.NewRequest(http.MethodPost, "/exec", strings.NewReader(`{"argv":["true"]}`))
+	r.Header.Set("Authorization", "Bearer "+testToken)
+	r.Header.Set("Content-Type", "application/json; charset=UTF-8; profile=test")
+	w = httptest.NewRecorder()
+	s.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("valid JSON media type rejected: %d %s", w.Code, w.Body.String())
+	}
+}
+
 // TestExecWorkingDirectoryEnvironmentAndExit verifies command working directory, environment and exit status.
 func TestExecWorkingDirectoryEnvironmentAndExit(t *testing.T) {
 	s, dir := newServer(t)
@@ -718,6 +740,45 @@ func TestExecGateRequestTimeoutStillBoundsMisparentedContext(t *testing.T) {
 	result := run(t, s, ExecRequest{Argv: []string{"sh", "-c", "sleep 30"}, TimeoutMS: 100})
 	if !result.TimedOut || result.ExitCode == 0 {
 		t.Fatal("outer deadline lost through gate", result)
+	}
+}
+
+// TestExecGatePreservesTimeoutResult verifies only an ordinary timeout becomes an execution result.
+func TestExecGatePreservesTimeoutResult(t *testing.T) {
+	for _, extra := range []bool{false, true} {
+		s, err := New(Config{Workspace: t.TempDir(), Token: testToken, ExecGate: func(ctx context.Context, run func(context.Context) error) error {
+			if err := run(ctx); err != nil {
+				return err
+			}
+			if extra {
+				return errors.Join(ctx.Err(), errors.New("ownership revoked"))
+			}
+			return ctx.Err()
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := call(s, "POST", "/exec", []byte(`{"argv":["sh","-c","sleep 30"],"timeoutMs":100}`))
+		if extra {
+			if response.Code != http.StatusConflict {
+				t.Fatalf("ownership failure was hidden: %d %s", response.Code, response.Body.String())
+			}
+		} else {
+			var result ExecResult
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &result) != nil || !result.TimedOut {
+				t.Fatalf("timeout result was lost: %d %s", response.Code, response.Body.String())
+			}
+		}
+		_ = s.Close()
+	}
+}
+
+// TestExecWaitDelayPreservesParentExitCode verifies an inherited pipe does not erase a successful exit.
+func TestExecWaitDelayPreservesParentExitCode(t *testing.T) {
+	s, _ := newServer(t)
+	result := run(t, s, ExecRequest{Argv: []string{"sh", "-c", "sleep 30 & exit 0"}})
+	if result.ExitCode != 0 || result.TimedOut {
+		t.Fatalf("parent exit was lost after pipe delay: %+v", result)
 	}
 }
 

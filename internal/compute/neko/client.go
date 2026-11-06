@@ -67,6 +67,7 @@ type Client struct {
 	sentFrames    uint64
 	done          chan struct{}
 	cancel        context.CancelFunc
+	disconnectErr error
 }
 
 type message struct {
@@ -273,12 +274,13 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.token = l.Token
 	c.cancel = cancel
 	c.done = make(chan struct{})
-	c.ready = true
+	c.ready = false
+	c.disconnectErr = nil
 	c.width = payload.ScreenSize.Width
 	c.height = payload.ScreenSize.Height
 	done := c.done
 	c.mu.Unlock()
-	if err = c.Reset(ctx); err != nil {
+	if err = c.resetWithToken(ctx, l.Token); err != nil {
 		cancel()
 		ws.CloseNow()
 		c.mu.Lock()
@@ -289,6 +291,9 @@ func (c *Client) Connect(ctx context.Context) error {
 		c.mu.Unlock()
 		return err
 	}
+	c.mu.Lock()
+	c.ready = true
+	c.mu.Unlock()
 	go c.readLoop(runCtx, ws, done)
 	return nil
 }
@@ -324,8 +329,13 @@ func (c *Client) readLoop(ctx context.Context, ws *websocket.Conn, done chan str
 		// Its failure is not converted into a successful readiness acknowledgement.
 		if token != "" {
 			resetCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-			_, _ = c.request(resetCtx, http.MethodPost, "/api/room/control/reset", token, nil)
+			_, err := c.request(resetCtx, http.MethodPost, "/api/room/control/reset", token, nil)
 			cancel()
+			c.mu.Lock()
+			if c.done == done {
+				c.disconnectErr = err
+			}
+			c.mu.Unlock()
 		}
 		close(done)
 	}()
@@ -414,10 +424,20 @@ func (c *Client) authenticated(ctx context.Context, method, path string, body an
 // upstream ownership to the trusted controller. It must succeed before a new
 // lease is published by control.Manager.
 func (c *Client) Reset(ctx context.Context) error {
-	if _, err := c.authenticated(ctx, http.MethodPost, "/api/room/control/reset", nil); err != nil {
+	c.mu.Lock()
+	token, ready := c.token, c.ready
+	c.mu.Unlock()
+	if token == "" || !ready {
+		return errors.New("neko: controller disconnected")
+	}
+	return c.resetWithToken(ctx, token)
+}
+
+func (c *Client) resetWithToken(ctx context.Context, token string) error {
+	if _, err := c.request(ctx, http.MethodPost, "/api/room/control/reset", token, nil); err != nil {
 		return err
 	}
-	if _, err := c.authenticated(ctx, http.MethodPost, "/api/room/control/take", nil); err != nil {
+	if _, err := c.request(ctx, http.MethodPost, "/api/room/control/take", token, nil); err != nil {
 		return err
 	}
 	return nil
@@ -457,7 +477,9 @@ func (c *Client) Close(ctx context.Context) error {
 				return ctx.Err()
 			}
 		}
-		return nil
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.disconnectErr
 	}
 	err := c.Reset(ctx)
 	if cancel != nil {
@@ -473,7 +495,10 @@ func (c *Client) Close(ctx context.Context) error {
 			}
 		}
 	}
-	return err
+	c.mu.Lock()
+	disconnectErr := c.disconnectErr
+	c.mu.Unlock()
+	return errors.Join(err, disconnectErr)
 }
 
 func validSession(session string) bool {

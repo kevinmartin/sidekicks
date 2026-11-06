@@ -4,7 +4,7 @@
 
 A one-use 32-byte random bootstrap ticket expires after one minute. Deliver it to the human as a URL fragment; the frontend consumes it with `POST /auth` and removes the fragment. The service stores only the ticket hash. Successful authentication sets a host-only, HttpOnly, SameSite=Strict cookie with a 30-minute lifetime. Cookie names are unique per service because browser cookies are not scoped by port. There are at most eight pending tickets and eight authenticated sessions. Rotating the same service's cookie retires only the old session and releases only its own still-current human lease.
 
-The listener must be published on loopback. Requests require a numeric `127.0.0.1:port` Host, and unsafe methods and WebSocket upgrades require the exact `http://Host` Origin. No wildcard Host/Origin patterns or forwarded-header trust are used. Request bodies are limited to 64 KiB with strict JSON fields and one JSON value. Asset routes are explicitly restricted; machine paths remain absent even when a desktop SDK extension is installed. These checks do not turn guest UI curation into a security sandbox.
+The listener must be published on loopback. Requests require a numeric `127.0.0.1:port` Host, and unsafe methods and WebSocket upgrades require the exact `http://Host` Origin. No wildcard Host/Origin patterns or forwarded-header trust are used. Built-in JSON route bodies are limited to 64 KiB with strict fields and one JSON value; extension handlers are responsible for their own validation and limits. Asset routes are explicitly restricted; machine paths remain absent even when a desktop SDK extension is installed. These checks do not turn guest UI curation into a security sandbox.
 
 Routes:
 

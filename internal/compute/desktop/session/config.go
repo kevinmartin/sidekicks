@@ -7,7 +7,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -128,15 +127,8 @@ func Generate(config Config) error {
 			return fmt.Errorf("required desktop asset is absent: %s", name)
 		}
 	}
-	if _, err = os.Lstat(filepath.Join(cfg.Home, ".sidekicks-session-configured")); err == nil {
-		return errors.New("refusing to replace an existing desktop home")
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	if entries, err := os.ReadDir(cfg.Home); err == nil && len(entries) > 0 {
-		return errors.New("refusing to overwrite a populated desktop home")
-	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+	if err = os.Mkdir(cfg.Home, 0700); err != nil {
+		return fmt.Errorf("refusing to create desktop home: %w", err)
 	}
 	if err = os.MkdirAll(filepath.Join(cfg.Home, ".run"), 0700); err != nil {
 		return err

@@ -204,11 +204,29 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "guest command could not start")
 		return
 	}
-	if gateErr != nil || callbackErr != nil {
+	if (gateErr != nil && !(result.TimedOut && deadlineOnly(gateErr))) || callbackErr != nil {
 		writeError(w, http.StatusConflict, "guest command ownership is unavailable or was revoked")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func deadlineOnly(err error) bool {
+	if err == nil || err == context.DeadlineExceeded {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, child := range joined.Unwrap() {
+			if !deadlineOnly(child) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return deadlineOnly(wrapped.Unwrap())
+	}
+	return false
 }
 
 func executeCommand(ctx context.Context, executable string, req ExecRequest, dir *os.File) (ExecResult, error) {
@@ -245,7 +263,11 @@ func executeCommand(ctx context.Context, executable string, req ExecRequest, dir
 		case errors.As(err, &exit):
 			result.ExitCode = exit.ExitCode()
 		case errors.Is(err, exec.ErrWaitDelay):
-			result.ExitCode = -1
+			if cmd.ProcessState != nil {
+				result.ExitCode = cmd.ProcessState.ExitCode()
+			} else {
+				result.ExitCode = -1
+			}
 		case ctx.Err() != nil:
 			result.ExitCode = -1
 		default:

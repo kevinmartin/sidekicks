@@ -151,12 +151,12 @@ func TestViewerLimitAndAllowedEvents(t *testing.T) {
 	if _, err := c.CreateViewer(context.Background(), "over"); err == nil {
 		t.Fatal("viewer limit ignored")
 	}
-	for _, event := range []string{"signal/offer", "signal/answer", "client/heartbeat", "system/heartbeat"} {
+	for _, event := range []string{"signal/request", "signal/provide", "signal/offer", "signal/answer", "signal/candidate", "signal/restart", "signal/close", "client/heartbeat", "system/heartbeat"} {
 		if !allowedViewerEvent(event) {
 			t.Fatal(event)
 		}
 	}
-	for _, event := range []string{"", "signal/", "control/move", "room/control/give", strings.Repeat("x", 129)} {
+	for _, event := range []string{"", "signal/", "signal/unexpected", "control/move", "room/control/give", strings.Repeat("x", 129)} {
 		if allowedViewerEvent(event) {
 			t.Fatal(event)
 		}

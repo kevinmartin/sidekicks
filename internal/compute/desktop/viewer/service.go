@@ -828,12 +828,19 @@ func (s *Service) websocket(w http.ResponseWriter, r *http.Request, viewer *sess
 		viewer.rfbDisconnected = true
 		credentials := stream.credentials
 		s.mu.Unlock()
+		keepCredentials := false
 		if credentials.Token != "" {
-			_ = s.releaseExact(credentials)
+			if lease, err := s.config.Gate.Validate(credentials); err == nil && lease.Owner == control.Human {
+				if lease.Mode == control.Gated {
+					_ = s.releaseExact(credentials)
+				} else {
+					keepCredentials = true
+				}
+			}
 		}
 		s.mu.Lock()
 		if viewer.rfb == stream {
-			if viewer.credentials == credentials {
+			if !keepCredentials && viewer.credentials == credentials {
 				viewer.credentials = control.Credentials{}
 			}
 			viewer.rfb = nil

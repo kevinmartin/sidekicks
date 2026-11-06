@@ -115,6 +115,7 @@ func WithResetTimeout(d time.Duration) Option {
 type intent struct {
 	ticket uint64
 	owner  Owner
+	cancel context.CancelFunc
 }
 
 // Manager serializes control leases and input dispatch.
@@ -162,6 +163,9 @@ func (m *Manager) unlock() {
 }
 func (m *Manager) revokeLocked() {
 	m.current = nil
+	if m.pending != nil && m.pending.cancel != nil {
+		m.pending.cancel()
+	}
 	m.pending = nil
 	m.generation++
 	m.blocked = true
@@ -294,10 +298,17 @@ func (m *Manager) Acquire(ctx context.Context, r Request) (Lease, error) {
 	}
 	m.revokeLocked()
 	ticket := m.generation
-	m.pending = &intent{ticket, r.Owner}
+	callerCtx := ctx
+	acquireCtx, cancel := context.WithCancel(ctx)
+	m.pending = &intent{ticket: ticket, owner: r.Owner, cancel: cancel}
 	m.mu.Unlock()
+	defer cancel()
+	ctx = acquireCtx
 	if err := m.lock(ctx); err != nil {
 		m.cancelIntent(ticket)
+		if callerCtx.Err() == nil {
+			return Lease{}, ErrConflict
+		}
 		return Lease{}, err
 	}
 	defer m.unlock()
@@ -317,6 +328,9 @@ func (m *Manager) Acquire(ctx context.Context, r Request) (Lease, error) {
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw[:])
 	if err := m.driver.Reset(ctx); err != nil {
+		if !m.intentCurrent(ticket) && callerCtx.Err() == nil {
+			return Lease{}, ErrConflict
+		}
 		m.failIntent(ticket)
 		m.cleanupAsync(ticket)
 		return Lease{}, fmt.Errorf("%w: reset: %w", ErrUnavailable, err)
@@ -326,6 +340,10 @@ func (m *Manager) Acquire(ctx context.Context, r Request) (Lease, error) {
 	}
 	if r.Mode == Native {
 		if err := native.Give(ctx, r.ViewerID); err != nil {
+			if !m.intentCurrent(ticket) && callerCtx.Err() == nil {
+				m.cleanupAsync(ticket)
+				return Lease{}, ErrConflict
+			}
 			m.failIntent(ticket)
 			m.cleanupAsync(ticket)
 			return Lease{}, fmt.Errorf("%w: native transfer: %w", ErrUnavailable, err)
@@ -338,7 +356,7 @@ func (m *Manager) Acquire(ctx context.Context, r Request) (Lease, error) {
 		}
 		m.mu.Unlock()
 		m.cleanupAsync(ticket)
-		if err := ctx.Err(); err != nil {
+		if err := callerCtx.Err(); err != nil {
 			return Lease{}, err
 		}
 		return Lease{}, ErrConflict

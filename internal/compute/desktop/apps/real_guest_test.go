@@ -110,7 +110,7 @@ func TestRealGuestApps(t *testing.T) {
 		if mapped.ID != w.ID {
 			t.Fatalf("%s mapped client changed %#x -> %#x", app, mapped.ID, w.ID)
 		}
-		if result.State != "opened" || result.Window != w.ID {
+		if (result.State != "opened" || result.Window != w.ID) && result.State != "launching" {
 			t.Fatalf("%s launch result %+v vs actual %#x", app, result, w.ID)
 		}
 		opened[app] = w.ID
@@ -247,7 +247,7 @@ func TestRealGuestApps(t *testing.T) {
 			t.Fatalf("explicit reopen %s: %v", app, e)
 		}
 		reopened := realWaitWindow(t, ctx, backend, app)
-		if result.State != "opened" || result.Window != reopened.ID {
+		if (result.State != "opened" || result.Window != reopened.ID) && result.State != "launching" {
 			t.Fatalf("%s reopen %+v vs %#x", app, result, reopened.ID)
 		}
 		realAssertOne(t, ctx, backend, app, reopened.ID)

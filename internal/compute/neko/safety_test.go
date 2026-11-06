@@ -37,6 +37,9 @@ func TestPinnedUpstreamInputPathsAreUnsupportedWithoutSending(t *testing.T) {
 // TestConnectedMediaViewerCannotBeGrantedNativeHost verifies connected media viewer cannot be granted native host.
 func TestConnectedMediaViewerCannotBeGrantedNativeHost(t *testing.T) {
 	c, f := connected(t)
+	if err := c.SetMediaPorts(allocation(45000)); err != nil {
+		t.Fatal(err)
+	}
 	viewer, err := c.CreateViewer(context.Background(), "media-only")
 	if err != nil {
 		t.Fatal(err)

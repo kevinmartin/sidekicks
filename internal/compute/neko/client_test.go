@@ -32,6 +32,9 @@ type fakeNeko struct {
 	viewer            *websocket.Conn
 	viewerDialStarted chan struct{}
 	viewerDialRelease chan struct{}
+	blockPath         string
+	pathStarted       chan struct{}
+	pathRelease       chan struct{}
 }
 
 func newFake(t *testing.T) *fakeNeko {
@@ -47,7 +50,20 @@ func (f *fakeNeko) serve(w http.ResponseWriter, r *http.Request) {
 	fail := f.failPath == r.URL.Path
 	loginBody := f.loginBody
 	shot := f.shot
+	block := f.blockPath == r.URL.Path
+	started, release := f.pathStarted, f.pathRelease
 	f.mu.Unlock()
+	if block {
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+	}
 	if fail {
 		http.Error(w, "secret never exposed", http.StatusServiceUnavailable)
 		return
@@ -133,6 +149,61 @@ func (f *fakeNeko) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+
+// TestConnectDoesNotPublishReadinessBeforeReset verifies initialization remains private.
+func TestConnectDoesNotPublishReadinessBeforeReset(t *testing.T) {
+	f := newFake(t)
+	f.blockPath = "/api/room/control/reset"
+	f.pathStarted = make(chan struct{}, 1)
+	f.pathRelease = make(chan struct{})
+	c, err := New(Config{Endpoint: f.server.URL, AdminUsername: "controller", AdminPassword: "private-admin", ViewerPassword: "private-view"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		result <- c.Connect(ctx)
+	}()
+	select {
+	case <-f.pathStarted:
+	case <-time.After(time.Second):
+		t.Fatal("reset did not start")
+	}
+	if c.Ready() {
+		t.Fatal("readiness published before reset completed")
+	}
+	if _, err := c.CreateViewer(context.Background(), "viewer"); err == nil {
+		t.Fatal("viewer admitted before reset completed")
+	}
+	close(f.pathRelease)
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if !c.Ready() {
+		t.Fatal("readiness not published after reset")
+	}
+	if err := c.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCloseReportsDisconnectResetFailure verifies cleanup failures remain observable.
+func TestCloseReportsDisconnectResetFailure(t *testing.T) {
+	c, f := connected(t)
+	f.mu.Lock()
+	f.failPath = "/api/room/control/reset"
+	ws := f.admin
+	f.mu.Unlock()
+	_ = ws.CloseNow()
+	wait(t, func() bool {
+		return !c.Ready()
+	})
+	if err := c.Close(context.Background()); err == nil {
+		t.Fatal("unconfirmed disconnect reset reported success")
+	}
 }
 func (f *fakeNeko) count() int {
 	f.mu.Lock()

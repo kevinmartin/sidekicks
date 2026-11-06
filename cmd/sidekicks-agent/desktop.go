@@ -40,6 +40,7 @@ type desktopWorkload struct {
 	stopSites    []func()
 	stopChildren []func()
 	childDone    []<-chan struct{}
+	siteDone     []<-chan struct{}
 	leaseMu      sync.Mutex
 	localLease   control.Lease
 	fixture      *assets.FixtureSite
@@ -52,7 +53,7 @@ type desktopDependencies struct {
 	newWindows   func(string, string) (apps.Windows, error)
 	newLauncher  func(apps.Config) (*apps.Launcher, error)
 	writeFile    func(string, []byte, os.FileMode) error
-	startSite    func(context.Context, string, http.Handler) (func(), error)
+	startSite    func(context.Context, string, http.Handler) (func(), <-chan struct{}, error)
 	startChild   func(context.Context, []string, string, ...string) (func(), <-chan struct{}, error)
 	waitTCP      func(context.Context, string) error
 	prepareNeko  func(*desktopWorkload, context.Context, string) error
@@ -142,11 +143,12 @@ func prepareDesktopWith(ctx context.Context, kind, token string, deps desktopDep
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 	})
-	stop, err := deps.startSite(ctx, "127.0.0.1:8081", site)
+	stop, siteDone, err := deps.startSite(ctx, "127.0.0.1:8081", site)
 	if err != nil {
 		return nil, err
 	}
 	d.stopSites = append(d.stopSites, stop)
+	d.siteDone = append(d.siteDone, siteDone)
 	switch kind {
 	case "desktop-novnc":
 		stop, done, childErr := deps.startChild(ctx, d.session.Env(), "/usr/local/bin/x11vnc", rfbServerArgs()...)
@@ -169,11 +171,12 @@ func prepareDesktopWith(ctx context.Context, kind, token string, deps desktopDep
 	default:
 		return nil, errors.New("unsupported desktop workload")
 	}
-	stop, err = deps.startSite(ctx, "0.0.0.0:6080", d.viewer)
+	stop, siteDone, err = deps.startSite(ctx, "0.0.0.0:6080", d.viewer)
 	if err != nil {
 		return nil, err
 	}
 	d.stopSites = append(d.stopSites, stop)
+	d.siteDone = append(d.siteDone, siteDone)
 	if os.Getenv("SIDEKICKS_DESKTOP_START_BROWSER") != "0" {
 		if _, err = d.launcher.Launch(ctx, apps.Browser); err != nil {
 			return nil, fmt.Errorf("initial guest browser: %w", err)
@@ -470,6 +473,13 @@ func strictJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 func (d *desktopWorkload) ready() error {
+	for _, done := range d.siteDone {
+		select {
+		case <-done:
+			return errors.New("guest desktop site stopped")
+		default:
+		}
+	}
 	for _, done := range d.childDone {
 		select {
 		case <-done:

@@ -14,8 +14,10 @@ BEGIN {
 }
 NR == 1 { if ($0 !~ /^mode: (atomic|count|set)$/) { print "Invalid coverage header" > "/dev/stderr"; bad = 1 }; next }
 {
-  if (NF != 3 || $2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/) { print "Malformed coverage record" > "/dev/stderr"; bad = 1; next }
+  if (NF != 3 || $1 !~ /^github[.]com\/kevinmartin\/sidekicks\/[A-Za-z0-9_.\/-]+[.]go:[0-9]+[.][0-9]+,[0-9]+[.][0-9]+$/ || $1 ~ /[.][.]/ || $2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/) { print "Malformed coverage record" > "/dev/stderr"; bad = 1; next }
   file=$1; sub(/:[0-9]+\.[0-9]+,[0-9]+\.[0-9]+$/, "", file)
+  source=file; sub(/^github[.]com\/kevinmartin\/sidekicks\//, "", source)
+  if (system("test -f " source) != 0) { print "Coverage source does not exist: " source > "/dev/stderr"; bad = 1; next }
   package=file; sub(/\/[^\/]+$/, "", package)
   statements[package]+=$2; total+=$2
   if ($3 > 0) { covered[package]+=$2; hit+=$2 }

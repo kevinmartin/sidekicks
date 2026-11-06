@@ -1,6 +1,6 @@
 # Go desktop session owner
 
-`session.Start(ctx, Config{})` is the Linux-guest session boundary. It renders configuration into a **fresh empty** private home, starts Xvfb `:99` at 1280×720 with TCP disabled, waits for a real X display, starts a private non-forking D-Bus session bus, then starts the standard `xfce4-session`. Closing an existing user session or overwriting an existing profile is deliberately not an initialization operation.
+`session.Start(ctx, Config{})` is the Linux-guest session boundary. It creates a **new** private home with restrictive permissions and renders configuration into it, starts Xvfb `:99` at 1280×720 with TCP disabled, waits for a real X display, starts a private non-forking D-Bus session bus, then starts the standard `xfce4-session`. Existing paths, including symlinks and empty directories, are rejected. Closing an existing user session or overwriting an existing profile is deliberately not an initialization operation.
 
 Default assets are `/usr/share/sidekicks/desktop`; they are the repository's original Sidekicks wallpaper, icons and GTK styling. Canonical Xfce templates are copied unchanged into this package and embedded. Go renders monitor/wallpaper paths, three fixed Browser/Terminal/Files launchers, keyboard shortcuts, supported logout confirmation, shared terminal appearance, a curated desktop menu and the named-user Xfce panel lock. The lock is UI curation, not a security boundary. No input interception, failed panel guard, Python generator or Node supervisor is used.
 

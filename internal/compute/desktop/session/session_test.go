@@ -273,6 +273,24 @@ func TestRealOwnedProcessStopAndProbe(t *testing.T) {
 	}
 }
 
+// TestOwnedProcessEnvironmentAndPreCanceledStart verifies agent secrets and canceled starts stay isolated.
+func TestOwnedProcessEnvironmentAndPreCanceledStart(t *testing.T) {
+	t.Setenv("SIDEKICKS_AGENT_TOKEN", "private-token")
+	runner := systemRunner{}
+	if err := runner.Probe(context.Background(), Command{Argv: []string{"/bin/sh", "-c", `test -z "${SIDEKICKS_AGENT_TOKEN+x}"`}}); err != nil {
+		t.Fatalf("probe inherited the token: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	path := filepath.Join(t.TempDir(), "started")
+	if _, err := startOwned(ctx, Command{Argv: []string{"/bin/sh", "-c", `printf started > "$1"`, "sh", path}}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-canceled start returned: %v", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pre-canceled command had a side effect: %v", err)
+	}
+}
+
 // TestProcessTreeUsesActualOwnedLiveComponents verifies process tree uses actual owned live components.
 func TestProcessTreeUsesActualOwnedLiveComponents(t *testing.T) {
 	states := map[int]processState{100: {pid: 100, name: "xfce4-session", uid: 1000, state: "S"}, 101: {pid: 101, ppid: 100, name: "xfwm4", uid: 1000, state: "S"}, 102: {pid: 102, ppid: 100, name: "xfsettingsd", uid: 1000, state: "S"}, 103: {pid: 103, ppid: 100, name: "xfce4-panel", uid: 1000, state: "S"}, 104: {pid: 104, ppid: 100, name: "xfdesktop", uid: 1000, state: "S"}}
@@ -325,6 +343,14 @@ func TestProcessObservationParserAndFilesystem(t *testing.T) {
 	}
 	if err = observeComponents(context.Background(), root, 100, 1000, []string{"xfwm4"}); err != nil {
 		t.Fatal(err)
+	}
+	for _, status := range []string{"Name: xfwm4 helper\nState: S\nPPid: 100\nUid: 1000\n", "Name: xfwm4\nState: T\nPPid: 100\nUid: 1000\n"} {
+		if err = os.WriteFile(filepath.Join(root, "101", "status"), []byte(status), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err = observeComponents(context.Background(), root, 100, 1000, []string{"xfwm4"}); err == nil {
+			t.Fatal("similarly named or stopped component accepted")
+		}
 	}
 	if err = observeComponents(context.Background(), "/missing-proc", 100, 1000, nil); err == nil {
 		t.Fatal("missing proc accepted")

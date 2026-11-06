@@ -103,6 +103,57 @@ func eventually(t *testing.T, fn func() bool) {
 	}
 }
 
+// TestMarkerFailureRetainsCrossLauncherCoordination verifies an unrecorded child cannot cause duplicate launches.
+func TestMarkerFailureRetainsCrossLauncherCoordination(t *testing.T) {
+	windows := &fakeWindows{}
+	starter := &fakeStarter{}
+	cfg := config(t, windows, starter)
+	first := launcher(t, cfg)
+	second := launcher(t, cfg)
+	starter.start = func(Command) (Process, error) {
+		if err := os.MkdirAll(first.markerPath(Terminal), 0700); err != nil {
+			return Process{}, err
+		}
+		return Process{PID: os.Getpid(), Done: make(chan error)}, nil
+	}
+	if _, err := first.Launch(context.Background(), Terminal); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("marker failure was not reported: %v", err)
+	}
+	result, err := second.Launch(context.Background(), Terminal)
+	if (err != nil && !errors.Is(err, ErrUnavailable)) || (err == nil && result.State != "launching") || starter.count() != 1 {
+		t.Fatalf("unrecorded child permitted a duplicate: %+v %v", result, err)
+	}
+	windows.set(normal(Terminal, 42))
+	eventually(t, func() bool {
+		result, err = second.Launch(context.Background(), Terminal)
+		return err == nil && result.State == "restored"
+	})
+	if starter.count() != 1 {
+		t.Fatal("duplicate launched after the window appeared")
+	}
+}
+
+// TestStaleMarkerDoesNotTrustReusedPID verifies launch coordination checks process identity.
+func TestStaleMarkerDoesNotTrustReusedPID(t *testing.T) {
+	windows := &fakeWindows{}
+	starter := &fakeStarter{}
+	l := launcher(t, config(t, windows, starter))
+	if err := os.MkdirAll(l.lockDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(marker{PID: os.Getpid(), Started: time.Now().Add(-time.Hour), Identity: "different-start-identity"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(l.markerPath(Terminal), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := l.Launch(context.Background(), Terminal)
+	if err != nil || result.State != "launching" || starter.count() != 1 {
+		t.Fatalf("stale marker suppressed the new launch: %+v %v", result, err)
+	}
+}
+
 // TestRestoreSameWindowAndCloseStaysClosedUntilExplicitLaunch verifies restore same window and close stays closed until explicit launch.
 func TestRestoreSameWindowAndCloseStaysClosedUntilExplicitLaunch(t *testing.T) {
 	for _, app := range []App{Browser, Terminal, Files} {

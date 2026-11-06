@@ -541,14 +541,15 @@ func TestLifecycleConcurrentRemovalIdempotence(t *testing.T) {
 // TestProvisionReconcilesEveryPostCreateFailureByImmutableID verifies that post-create failures are reconciled using the immutable ID.
 func TestProvisionReconcilesEveryPostCreateFailureByImmutableID(t *testing.T) {
 	cases := []struct {
-		name                                                                      string
-		failInitial, failFinal, cancelAfterCreate, badFinalMetadata, replaceFinal bool
+		name                                                                                    string
+		failInitial, failFinal, cancelAfterCreate, badFinalMetadata, replaceFinal, stoppedFinal bool
 	}{
 		{name: "initial-inspect-error", failInitial: true},
 		{name: "final-inspect-error", failFinal: true},
 		{name: "caller-canceled-after-create", cancelAfterCreate: true},
 		{name: "final-metadata-invalid", badFinalMetadata: true},
 		{name: "final-object-replaced", replaceFinal: true},
+		{name: "exited-immediately-after-start", stoppedFinal: true},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -579,6 +580,9 @@ func TestProvisionReconcilesEveryPostCreateFailureByImmutableID(t *testing.T) {
 					}
 					if tt.replaceFinal && nameInspects == 2 {
 						c.ID = strings.Repeat("d", 64)
+					}
+					if tt.stoppedFinal && nameInspects == 2 {
+						c.State.Status = "exited"
 					}
 					return jsonResponse(c), nil
 				case p == api+"/containers/"+containerID+"/json":

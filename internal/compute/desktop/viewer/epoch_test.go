@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func epochRequest(service *Service, path, body string, cookie *http.Cookie, epochs ...string) *httptest.ResponseRecorder {
@@ -131,6 +132,13 @@ func TestInputBodyCompletionCannotAdoptNewServerHeldCredentials(t *testing.T) {
 			cookie := authenticate(t, service)
 			old := take(t, service, cookie)
 			delayed := &delayedBody{reader: strings.NewReader(body), entered: make(chan struct{}), proceed: make(chan struct{})}
+			t.Cleanup(func() {
+				select {
+				case <-delayed.proceed:
+				default:
+					close(delayed.proceed)
+				}
+			})
 			r := httptest.NewRequest(http.MethodPost, "/input", delayed)
 			r.Host = authority
 			r.Header.Set("Origin", "http://"+authority)
@@ -143,7 +151,11 @@ func TestInputBodyCompletionCannotAdoptNewServerHeldCredentials(t *testing.T) {
 				service.ServeHTTP(w, r)
 				done <- w
 			}()
-			<-delayed.entered // The old epoch was accepted and its exact credentials captured.
+			select {
+			case <-delayed.entered: // The old epoch was accepted and its exact credentials captured.
+			case <-time.After(time.Second):
+				t.Fatal("delayed request did not begin")
+			}
 			if response := epochRequest(service, "/control", `{"action":"release"}`, cookie, strconv.FormatUint(old, 10)); response.Code != http.StatusOK {
 				t.Fatal(response.Body.String())
 			}
@@ -154,7 +166,12 @@ func TestInputBodyCompletionCannotAdoptNewServerHeldCredentials(t *testing.T) {
 			before := driver.resets.Load()
 			owner := gate.View().Session
 			close(delayed.proceed)
-			response := <-done
+			var response *httptest.ResponseRecorder
+			select {
+			case response = <-done:
+			case <-time.After(time.Second):
+				t.Fatal("delayed request did not complete")
+			}
 			expected := http.StatusConflict
 			if body == `not-json` {
 				expected = http.StatusBadRequest

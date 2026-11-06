@@ -425,10 +425,10 @@
               },
               body: JSON.stringify({ app }),
             });
-            const data = await response.json();
+            const data = await response.json().catch(() => ({}));
             if (!response.ok)
               throw new Error(
-                response.status === 409
+                response.status === 403 || response.status === 409
                   ? "Take control in the viewer first."
                   : data.error || "Could not open this app.",
               );

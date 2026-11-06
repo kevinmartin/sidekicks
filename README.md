@@ -8,7 +8,7 @@ The four workload adapters are `shell`, `browser-chromium`, `desktop-novnc` and 
 
 The module's `go 1.25.0` directive is a language and API compatibility baseline, not a recommendation to deploy an unsupported toolchain. This pass uses Go 1.27.3; choose a patched toolchain within the [official Go support window](https://go.dev/doc/devel/release#policy). A build with the minimum-version toolchain has not been verified here.
 
-Go, Node and a local Docker Engine are required for the full verification path. From the repository root:
+Go, Node, a local Docker Engine, and a locally installed Chrome/Chromium executable usable by Playwright are required for the full verification path. The release advisory gate additionally requires the pinned Trivy tool (`make release-tools`), the pinned govulncheck tool, and network access to the advisory databases. From the repository root:
 
 ```sh
 make setup       # install pinned development tools and web dependencies
@@ -31,6 +31,6 @@ The CLI starts with `sidekicks adapters`; lifecycle and guest operations are des
 - `infrastructure/images/` contains the clean image recipe, its assets and pinned upstream module metadata.
 - `scripts/compute/` and `test/` contain development, security and verification tooling.
 
-The earlier POC source is preserved in the local `reference/poc` branch and `poc-baseline-2026-10-30` tag. Ignored VM disks, runtime state and evidence are not contained in that branch and remain local; they are not an off-host backup. See [POC preservation](docs/reference-poc/preservation.md). Nothing has been pushed by this work.
+The earlier POC source is preserved in the local `reference/poc` branch and `poc-baseline-2026-10-30` tag. Ignored VM disks, runtime state and evidence are not contained in that branch and remain local; they are not an off-host backup. See [POC preservation](docs/reference-poc/preservation.md).
 
 See [architecture](docs/architecture/overview.md), [desktop control](docs/architecture/desktop-stack.md), and [current status](docs/compute/status.md) for supported behavior, evidence and open limitations.

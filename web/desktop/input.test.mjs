@@ -9,6 +9,70 @@ import {
   streamGeometry,
 } from "./input.mjs";
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+test("touch and pen pointer input fail the active epoch before dispatch", () => {
+  const previous = {
+    document: globalThis.document,
+    window: globalThis.window,
+    ResizeObserver: globalThis.ResizeObserver,
+  };
+  const element = () => ({
+    style: {},
+    handlers: new Map(),
+    setAttribute() {},
+    focus() {},
+    addEventListener(type, handler) {
+      this.handlers.set(type, handler);
+    },
+    removeEventListener() {},
+    getBoundingClientRect() {
+      return { left: 0, top: 0, width: 1280, height: 720 };
+    },
+    append(...children) {
+      for (const child of children) child.parentNode = this;
+    },
+  });
+  const document = element();
+  document.createElement = element;
+  globalThis.document = document;
+  globalThis.window = element();
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  try {
+    for (const pointerType of ["touch", "pen", ""]) {
+      const failures = [],
+        sent = [];
+      const container = element();
+      const input = new DesktopInput({
+        container,
+        geometry: () => null,
+        send: (events) => sent.push(events),
+        getEpoch: () => 7,
+        onFailure: (error, epoch) => failures.push({ error, epoch }),
+      });
+      input.activate(7);
+      let stopped = 0;
+      input.box.handlers.get("pointerdown")({
+        pointerType,
+        preventDefault() {
+          stopped++;
+        },
+        stopImmediatePropagation() {
+          stopped++;
+        },
+      });
+      assert.equal(stopped, 2);
+      assert.equal(input.active, 0);
+      assert.equal(failures.length, 1);
+      assert.equal(failures[0].epoch, 7);
+      assert.deepEqual(sent, []);
+    }
+  } finally {
+    Object.assign(globalThis, previous);
+  }
+});
 function queueFixture() {
   let current = 1;
   const calls = [],

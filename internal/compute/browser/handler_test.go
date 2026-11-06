@@ -96,6 +96,20 @@ func TestHandlerActualProtocolFlow(t *testing.T) {
 	if status, r := handlerCall(t, h, request{Action: "title", PageID: id}); status != 404 {
 		t.Fatal(status, r)
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	want := []string{"Page.navigate", "Runtime.evaluate", "Runtime.evaluate", "Runtime.evaluate", "Input.dispatchMouseEvent", "Input.dispatchMouseEvent", "Input.insertText", "Emulation.setDeviceMetricsOverride", "Page.captureScreenshot"}
+	if len(f.commands) != len(want) {
+		t.Fatalf("unexpected protocol commands: %+v", f.commands)
+	}
+	for i, method := range want {
+		if f.commands[i].Method != method {
+			t.Fatalf("command %d: %+v", i, f.commands[i])
+		}
+	}
+	if f.commands[0].Params["url"] != "https://example.com" || f.commands[4].Params["type"] != "mousePressed" || f.commands[5].Params["type"] != "mouseReleased" || f.commands[6].Params["text"] != "Hi ✓" {
+		t.Fatalf("incorrect protocol parameters: %+v", f.commands)
+	}
 }
 
 // TestHandlerMachineBoundary verifies handler machine boundary.
@@ -115,6 +129,7 @@ func TestHandlerMachineBoundary(t *testing.T) {
 		{name: "unknown-field", method: "POST", path: "/browser", content: "application/json", body: `{"action":"new","endpoint":"http://evil"}`, status: 400},
 		{name: "extra-json", method: "POST", path: "/browser", content: "application/json", body: `{"action":"new"} {}`, status: 400},
 		{name: "oversize", method: "POST", path: "/browser", content: "application/json", body: `{"text":"` + strings.Repeat("a", 128<<10) + `"}`, status: 413},
+		{name: "oversize-trailing-whitespace", method: "POST", path: "/browser", content: "application/json", body: `{"action":"new"}` + strings.Repeat(" ", 128<<10), status: 413},
 		{name: "unavailable", method: "POST", path: "/browser", content: "application/json", body: `{"action":"new"}`, status: 503},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -134,6 +149,19 @@ func TestHandlerMachineBoundary(t *testing.T) {
 				t.Fatal("Allow missing")
 			}
 		})
+	}
+}
+
+// TestHandlerRejectsMultipleOriginHeaders verifies every Origin value is checked.
+func TestHandlerRejectsMultipleOriginHeaders(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/browser", strings.NewReader(`{"action":"new"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Add("Origin", "")
+	r.Header.Add("Origin", "https://example.com")
+	w := httptest.NewRecorder()
+	NewHandler(nil).ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("multiple Origin headers accepted: %d", w.Code)
 	}
 }
 

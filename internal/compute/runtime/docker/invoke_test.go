@@ -330,3 +330,24 @@ func TestInvokeWithInstanceRejectsUnavailableGeneration(t *testing.T) {
 		t.Fatalf("missing generation: %v builder=%v", err, called)
 	}
 }
+
+// TestInvokeWithInstancePreservesCanceledVerification verifies caller cancellation remains observable.
+func TestInvokeWithInstancePreservesCanceledVerification(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := fake(func(req *http.Request) (*http.Response, error) {
+		if err := req.Context().Err(); err != nil {
+			return nil, err
+		}
+		c := owned()
+		c.State.StartedAt = "2026-10-30T00:00:01Z"
+		return jsonResponse(c), nil
+	})
+	_, _, err := r.InvokeWithInstance(ctx, testID, func(compute.Instance) ([]byte, error) {
+		cancel()
+		return []byte(`{"method":"GET","path":"/health"}`), nil
+	})
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, compute.ErrConflict) {
+		t.Fatalf("cancellation was not preserved: %v", err)
+	}
+}

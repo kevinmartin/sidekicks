@@ -21,3 +21,6 @@ func lockFile(string) (func(), error) {
 func processAlive(int) bool {
 	return false
 }
+func processIdentity(int) (string, error) {
+	return "", ErrUnavailable
+}

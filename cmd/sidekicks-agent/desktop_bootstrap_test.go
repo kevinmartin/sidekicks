@@ -108,9 +108,9 @@ func bootstrapSetup(t *testing.T) *bootstrapFixture {
 			}
 			return nil
 		},
-		startSite: func(_ context.Context, address string, handler http.Handler) (func(), error) {
+		startSite: func(_ context.Context, address string, handler http.Handler) (func(), <-chan struct{}, error) {
 			if (address == "127.0.0.1:8081" && h.fail == "home-site") || (address == "0.0.0.0:6080" && h.fail == "viewer-site") {
-				return nil, errors.New("site failed")
+				return nil, nil, errors.New("site failed")
 			}
 			h.sites[address] = handler
 			if address == "0.0.0.0:6080" {
@@ -129,7 +129,7 @@ func bootstrapSetup(t *testing.T) *bootstrapFixture {
 			}
 			return func() {
 				h.stoppedSites = append(h.stoppedSites, address)
-			}, nil
+			}, make(chan struct{}), nil
 		},
 		startChild: func(_ context.Context, env []string, path string, args ...string) (func(), <-chan struct{}, error) {
 			if h.fail == "child" {
@@ -250,6 +250,13 @@ func TestDesktopBootstrapPrivateHomeAndHumanLaunchContract(t *testing.T) {
 	if h.kind != apps.Chromium || h.tokenWrites != 1 || len(h.sites) != 2 || desktop.ready() != nil {
 		t.Fatal("desktop startup contract incomplete")
 	}
+	failedSite := make(chan struct{})
+	close(failedSite)
+	desktop.siteDone = append(desktop.siteDone, failedSite)
+	if desktop.ready() == nil {
+		t.Fatal("stopped site was treated as ready")
+	}
+	desktop.siteDone = desktop.siteDone[:len(desktop.siteDone)-1]
 	site := h.sites["127.0.0.1:8081"]
 	response := homeRequest(site, "GET", "/home", "", "", "127.0.0.1:5", "127.0.0.1:8081", "")
 	if response.Code != 200 || strings.Contains(response.Body.String(), "__SIDEKICKS_DESKTOP_TOKEN__") || !strings.Contains(response.Body.String(), h.homeToken) || strings.Contains(response.Body.String(), orchestrationToken) {
@@ -302,7 +309,7 @@ func TestDesktopBootstrapRespectsBackendChoiceAndNoBrowserOverride(t *testing.T)
 		t.Fatal(err)
 	}
 	defer desktop.close()
-	if h.kind != apps.Firefox || len(h.sites) != 2 {
+	if h.kind != apps.Firefox || len(h.sites) != 2 || h.sites["0.0.0.0:6080"] == nil {
 		t.Fatal("Neko desktop selected a different browser contract")
 	}
 	if len(desktop.childDone) != 0 {

@@ -19,7 +19,7 @@ import (
 // process are fixed inside the disposable Linux guest. Chromium's own sandbox is
 // enabled unless an explicit compatibility opt-in is supplied by the operator.
 type browserDependencies struct {
-	startSite  func(context.Context, string, http.Handler) (func(), error)
+	startSite  func(context.Context, string, http.Handler) (func(), <-chan struct{}, error)
 	command    func(context.Context, string, ...string) *exec.Cmd
 	httpClient *http.Client
 }
@@ -32,7 +32,7 @@ func prepareBrowserWith(ctx context.Context, noSandbox bool, deps browserDepende
 	fixture := assets.NewFixtureSite()
 	site.Handle("/fixture", fixture)
 	site.Handle("/fixture/state", fixture)
-	stopSite, err := deps.startSite(ctx, "127.0.0.1:8081", site)
+	stopSite, siteDone, err := deps.startSite(ctx, "127.0.0.1:8081", site)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -81,7 +81,11 @@ func prepareBrowserWith(ctx context.Context, noSandbox bool, deps browserDepende
 	defer cancel()
 	tick := time.NewTicker(50 * time.Millisecond)
 	defer tick.Stop()
-	httpClient := deps.httpClient
+	clientCopy := *deps.httpClient
+	clientCopy.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	httpClient := &clientCopy
 	for {
 		req, _ := http.NewRequestWithContext(readyCtx, http.MethodGet, "http://127.0.0.1:9222/json/version", nil)
 		res, e := httpClient.Do(req)
@@ -91,6 +95,8 @@ func prepareBrowserWith(ctx context.Context, noSandbox bool, deps browserDepende
 				retainSite = true
 				health := func() error {
 					select {
+					case <-siteDone:
+						return errors.New("guest fixture site stopped")
 					case <-done:
 						return errors.New("guest chromium stopped")
 					default:
@@ -112,6 +118,9 @@ func prepareBrowserWith(ctx context.Context, noSandbox bool, deps browserDepende
 			}
 		}
 		select {
+		case <-siteDone:
+			closeAll()
+			return nil, nil, nil, errors.New("guest fixture site stopped before readiness")
 		case <-done:
 			closeAll()
 			return nil, nil, nil, fmt.Errorf("chromium stopped before readiness: %s", diagnostic.String())

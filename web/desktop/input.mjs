@@ -146,8 +146,15 @@ export class DesktopInput {
       event.preventDefault();
       event.stopImmediatePropagation();
     };
+    const mouseOnly = (event) => {
+      if (event.pointerType === "mouse") return true;
+      stop(event);
+      this.fail(Error("Touch and pen input are unsupported"));
+      return false;
+    };
     on(this.box, "pointerdown", (event) => {
       if (!this.live()) return;
+      if (!mouseOnly(event)) return;
       stop(event);
       this.box.focus({ preventScroll: true });
       const button = ["left", "middle", "right"][event.button],
@@ -160,12 +167,14 @@ export class DesktopInput {
     });
     on(this.box, "pointermove", (event) => {
       if (!this.live()) return;
+      if (!mouseOnly(event)) return;
       stop(event);
       const p = this.point(event);
       if (p) this.enqueue({ type: "pointer", action: "move", ...p });
     });
     on(this.box, "pointerup", (event) => {
       if (!this.live()) return;
+      if (!mouseOnly(event)) return;
       stop(event);
       const button = ["left", "middle", "right"][event.button],
         p = this.point(event);
