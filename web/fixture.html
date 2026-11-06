@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sidekicks · Synthetic Desktop Fixture</title>
+    <style>
+      :root {
+        font:
+          14px system-ui,
+          sans-serif;
+        color: #e6eef9;
+        background: #0b1020;
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 18px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      h1 {
+        font-size: 23px;
+        margin: 0;
+      }
+      p {
+        color: #9fb2ce;
+        margin: 5px 0;
+      }
+      button,
+      input,
+      textarea {
+        font: inherit;
+        border: 1px solid #50617b;
+        border-radius: 7px;
+        background: #18243b;
+        color: #fff;
+        padding: 10px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover {
+        background: #283d5e;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.1fr;
+        gap: 14px;
+      }
+      .panel {
+        border: 1px solid #2c3a54;
+        border-radius: 12px;
+        padding: 14px;
+        background: #111b2e;
+        min-width: 0;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 0 0 10px;
+        color: #bcd5fb;
+      }
+      textarea {
+        width: 100%;
+        height: 86px;
+        resize: vertical;
+      }
+      #click-target {
+        display: block;
+        width: 100%;
+        height: 76px;
+        background: #264e67;
+        margin-top: 12px;
+      }
+      #drag-stage {
+        height: 170px;
+        background: #0b1324;
+        border: 1px dashed #526889;
+        position: relative;
+        overflow: hidden;
+        margin-top: 12px;
+        border-radius: 9px;
+      }
+      #drag-token {
+        position: absolute;
+        left: 12px;
+        top: 52px;
+        width: 58px;
+        height: 58px;
+        background: #d8b45a;
+        color: #15180e;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        touch-action: none;
+        user-select: none;
+        cursor: grab;
+        z-index: 2;
+      }
+      #drop-zone {
+        position: absolute;
+        right: 10px;
+        top: 27px;
+        width: 105px;
+        height: 105px;
+        border: 2px dashed #7796bb;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #9fb2ce;
+      }
+      #scroll-box {
+        height: 165px;
+        overflow: auto;
+        border: 1px solid #40526e;
+        border-radius: 9px;
+        overscroll-behavior: contain;
+        margin-top: 12px;
+        background: #0d1729;
+      }
+      #scroll-content {
+        height: 900px;
+        width: 700px;
+        padding: 16px;
+        background: repeating-linear-gradient(
+          #17283f 0 60px,
+          #101b2e 60px 120px
+        );
+      }
+      #gesture-pad {
+        height: 106px;
+        background: #242244;
+        border: 1px solid #615d9a;
+        border-radius: 9px;
+        padding: 14px;
+        margin-top: 12px;
+        touch-action: auto;
+      }
+      #event-log {
+        font:
+          11px ui-monospace,
+          monospace;
+        white-space: pre-wrap;
+        overflow: auto;
+        height: 420px;
+        margin: 0;
+        color: #aee2d4;
+      }
+      #last-event {
+        min-height: 44px;
+        color: #e5c678;
+        font:
+          12px ui-monospace,
+          monospace;
+        margin: 12px 0;
+      }
+      .counts {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .counts span {
+        color: #80d6be;
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 12px;
+        color: #8da3c1;
+        font-size: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      #key-state {
+        font:
+          12px ui-monospace,
+          monospace;
+        margin: 10px 0;
+        min-height: 30px;
+      }
+      .help {
+        font-size: 12px;
+      }
+      #clock {
+        font:
+          12px ui-monospace,
+          monospace;
+        color: #91abd0;
+      }
+      @media (max-width: 900px) {
+        main {
+          grid-template-columns: 1fr 1fr;
+        }
+        .events {
+          grid-column: 1/-1;
+        }
+        #event-log {
+          height: 180px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Sidekicks / Input Lab</h1>
+        <p>
+          Synthetic content only · observable keyboard, pointer, and gesture
+          events
+        </p>
+      </div>
+      <div id="clock"></div>
+    </header>
+    <main>
+      <section class="panel">
+        <h2>01 · Keyboard & clicks</h2>
+        <label for="typing"
+          >Type a unique phrase, then try Ctrl/Meta+A, Shift, arrows and
+          Enter</label
+        ><textarea
+          id="typing"
+          spellcheck="false"
+          placeholder="Sidekicks test text"
+        ></textarea>
+        <div id="key-state">Held keys: none</div>
+        <button id="click-target">Click · right click · double click</button>
+        <div id="last-event">Waiting for input</div>
+        <div class="counts">
+          <div>Clicks <span id="click-count">0</span></div>
+          <div>Double <span id="double-count">0</span></div>
+          <div>Right <span id="right-count">0</span></div>
+          <div>Drops <span id="drop-count">0</span></div>
+        </div>
+        <p class="help">
+          Browser context menu is suppressed on the target so right-click is
+          visible in the log.
+        </p>
+        <button id="audio-test">Play 250 ms test tone</button>
+        <p class="help">
+          Tone confirms fixture audio generation only. Receiver audio must be
+          verified independently.
+        </p>
+      </section>
+      <section class="panel">
+        <h2>02 · Drag, scroll & gestures</h2>
+        <div id="drag-stage">
+          <div id="drag-token" role="button" aria-label="Drag token">DRAG</div>
+          <div id="drop-zone">DROP HERE</div>
+        </div>
+        <div id="scroll-box" tabindex="0" aria-label="Scroll test">
+          <div id="scroll-content">
+            Scrollable area · 700 × 900 px<br />Use wheel or trackpad.
+            Horizontal scrolling is logged too.
+          </div>
+        </div>
+        <div id="gesture-pad">
+          Native gesture observation pad
+          <p class="help">
+            Wheel + Ctrl is recorded as zoom emulation. A wheel event alone does
+            not prove native pinch or swipe.
+          </p>
+        </div>
+        <p id="scroll-state" class="help">Scroll x=0 y=0</p>
+      </section>
+      <section class="panel events">
+        <h2>03 · Timestamped event evidence</h2>
+        <div class="row">
+          <button id="clear">Clear log</button
+          ><button id="export">Export JSON</button>
+        </div>
+        <p class="help">
+          Latest 120 visible; up to 1,000 retained. Trusted reflects browser
+          event provenance, not agent ownership.
+        </p>
+        <pre id="event-log" aria-live="polite"></pre>
+      </section>
+    </main>
+    <footer>
+      <span id="viewport"></span><span id="event-total">0 events</span
+      ><span>No model calls · no host data · fixture v1</span>
+    </footer>
+    <script>
+      (() => {
+        "use strict";
+        const $ = (id) => document.getElementById(id),
+          events = [],
+          held = new Set(),
+          counts = { click: 0, double: 0, right: 0, drop: 0 };
+        let seq = 0,
+          drag = null;
+        const log = (type, data = {}, event) => {
+          const item = {
+            seq: ++seq,
+            at: new Date().toISOString(),
+            monotonicMs: Math.round(performance.now() * 100) / 100,
+            type,
+            ...data,
+          };
+          if (event) item.trusted = event.isTrusted;
+          events.push(item);
+          if (events.length > 1000) events.shift();
+          $("event-log").textContent = events
+            .slice(-120)
+            .reverse()
+            .map((x) => JSON.stringify(x))
+            .join("\n");
+          $("event-total").textContent = seq + " events";
+          $("last-event").textContent = type + " · " + item.at;
+          return item;
+        };
+        const keyState = () =>
+          ($("key-state").textContent =
+            "Held keys: " + ([...held].join(", ") || "none"));
+        document.addEventListener("keydown", (e) => {
+          held.add(e.code);
+          keyState();
+          log(
+            "keydown",
+            {
+              key: e.key,
+              code: e.code,
+              ctrl: e.ctrlKey,
+              alt: e.altKey,
+              shift: e.shiftKey,
+              meta: e.metaKey,
+              repeat: e.repeat,
+            },
+            e,
+          );
+        });
+        document.addEventListener("keyup", (e) => {
+          held.delete(e.code);
+          keyState();
+          log(
+            "keyup",
+            {
+              key: e.key,
+              code: e.code,
+              ctrl: e.ctrlKey,
+              alt: e.altKey,
+              shift: e.shiftKey,
+              meta: e.metaKey,
+            },
+            e,
+          );
+        });
+        window.addEventListener("blur", () => {
+          held.clear();
+          keyState();
+          log("window-blur");
+        });
+        $("typing").addEventListener("input", (e) =>
+          log(
+            "text-input",
+            { value: e.target.value, inputType: e.inputType },
+            e,
+          ),
+        );
+        for (const [type, label, counter] of [
+          ["click", "click", "click"],
+          ["dblclick", "double-click", "double"],
+          ["contextmenu", "right-click", "right"],
+        ])
+          $("click-target").addEventListener(type, (e) => {
+            if (type === "contextmenu") e.preventDefault();
+            counts[counter]++;
+            $(
+              counter === "double"
+                ? "double-count"
+                : counter === "right"
+                  ? "right-count"
+                  : "click-count",
+            ).textContent = counts[counter];
+            log(
+              label,
+              {
+                x: e.clientX,
+                y: e.clientY,
+                button: e.button,
+                detail: e.detail,
+              },
+              e,
+            );
+          });
+        const stage = $("drag-stage"),
+          token = $("drag-token");
+        token.addEventListener("pointerdown", (e) => {
+          if (e.button !== 0) return;
+          const r = token.getBoundingClientRect();
+          drag = {
+            id: e.pointerId,
+            dx: e.clientX - r.left,
+            dy: e.clientY - r.top,
+          };
+          token.setPointerCapture(e.pointerId);
+          log(
+            "drag-start",
+            { x: e.clientX, y: e.clientY, pointerType: e.pointerType },
+            e,
+          );
+        });
+        token.addEventListener("pointermove", (e) => {
+          if (!drag) return;
+          const r = stage.getBoundingClientRect();
+          token.style.left =
+            Math.max(0, Math.min(r.width - 60, e.clientX - r.left - drag.dx)) +
+            "px";
+          token.style.top =
+            Math.max(0, Math.min(r.height - 60, e.clientY - r.top - drag.dy)) +
+            "px";
+        });
+        const endDrag = (e) => {
+          if (!drag) return;
+          drag = null;
+          const a = token.getBoundingClientRect(),
+            b = $("drop-zone").getBoundingClientRect(),
+            dropped =
+              a.left + a.width / 2 >= b.left &&
+              a.left + a.width / 2 <= b.right &&
+              a.top + a.height / 2 >= b.top &&
+              a.top + a.height / 2 <= b.bottom;
+          if (dropped) {
+            counts.drop++;
+            $("drop-count").textContent = counts.drop;
+            $("drop-zone").style.background = "#244b42";
+          }
+          log("drag-end", { x: e.clientX, y: e.clientY, dropped }, e);
+        };
+        token.addEventListener("pointerup", endDrag);
+        token.addEventListener("pointercancel", (e) => {
+          drag = null;
+          log("drag-cancel", {}, e);
+        });
+        $("scroll-box").addEventListener("scroll", (e) => {
+          const el = e.target;
+          $("scroll-state").textContent =
+            `Scroll x=${el.scrollLeft} y=${el.scrollTop}`;
+          log("scroll-position", { x: el.scrollLeft, y: el.scrollTop }, e);
+        });
+        for (const id of ["scroll-box", "gesture-pad"])
+          $(id).addEventListener(
+            "wheel",
+            (e) =>
+              log(
+                e.ctrlKey ? "wheel-zoom-emulation-observed" : "wheel",
+                {
+                  target: id,
+                  deltaX: e.deltaX,
+                  deltaY: e.deltaY,
+                  deltaMode: e.deltaMode,
+                  ctrl: e.ctrlKey,
+                },
+                e,
+              ),
+            { passive: true },
+          );
+        for (const name of [
+          "gesturestart",
+          "gesturechange",
+          "gestureend",
+          "touchstart",
+          "touchmove",
+          "touchend",
+        ])
+          $("gesture-pad").addEventListener(
+            name,
+            (e) =>
+              log(
+                "native-" + name,
+                {
+                  scale: e.scale,
+                  rotation: e.rotation,
+                  touches: e.touches?.length,
+                },
+                e,
+              ),
+            { passive: true },
+          );
+        $("audio-test").onclick = async () => {
+          try {
+            const context = new (window.AudioContext ||
+              window.webkitAudioContext)();
+            await context.resume();
+            const oscillator = context.createOscillator(),
+              gain = context.createGain();
+            oscillator.frequency.value = 440;
+            gain.gain.value = 0.06;
+            oscillator.connect(gain).connect(context.destination);
+            oscillator.start();
+            oscillator.stop(context.currentTime + 0.25);
+            oscillator.onended = () => context.close();
+            log("audio-tone-generated", { durationMs: 250, frequencyHz: 440 });
+          } catch (error) {
+            log("audio-error", { message: error.message });
+          }
+        };
+        $("clear").onclick = () => {
+          events.length = 0;
+          seq = 0;
+          log("log-cleared");
+        };
+        $("export").onclick = () => {
+          const data = JSON.stringify(
+              window.__sidekicksFixture.snapshot(),
+              null,
+              2,
+            ),
+            a = document.createElement("a");
+          a.href = URL.createObjectURL(
+            new Blob([data], { type: "application/json" }),
+          );
+          a.download = "sidekicks-fixture-events.json";
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        };
+        const dimensions = () => {
+          $("viewport").textContent =
+            `Viewport ${innerWidth} × ${innerHeight} · DPR ${devicePixelRatio}`;
+        };
+        dimensions();
+        window.addEventListener("resize", dimensions);
+        setInterval(
+          () => ($("clock").textContent = new Date().toISOString()),
+          250,
+        );
+        window.__sidekicksFixture = {
+          snapshot: () => ({
+            version: 1,
+            capturedAt: new Date().toISOString(),
+            viewport: {
+              width: innerWidth,
+              height: innerHeight,
+              dpr: devicePixelRatio,
+            },
+            text: $("typing").value,
+            counts: { ...counts },
+            scroll: {
+              x: $("scroll-box").scrollLeft,
+              y: $("scroll-box").scrollTop,
+            },
+            heldKeys: [...held],
+            events: [...events],
+          }),
+          reset: () => {
+            $("clear").click();
+          },
+        };
+        log("fixture-ready", {
+          width: innerWidth,
+          height: innerHeight,
+          dpr: devicePixelRatio,
+        });
+      })();
+    </script>
+    <script>
+      (() => {
+        const instance = Math.random().toString(36).slice(2);
+        let pending = false;
+        let lastPointer = null;
+        document.addEventListener(
+          "pointerdown",
+          (e) => {
+            lastPointer = {
+              clientX: e.clientX,
+              clientY: e.clientY,
+              screenX: e.screenX,
+              screenY: e.screenY,
+              button: e.button,
+            };
+          },
+          { capture: true },
+        );
+        async function report() {
+          if (pending || !window.__sidekicksFixture) return;
+          pending = true;
+          const state = window.__sidekicksFixture.snapshot();
+          state.instance = instance;
+          state.pointer = lastPointer;
+          state.rects = Object.fromEntries(
+            ["typing", "click-target"].map((id) => {
+              const r = document.getElementById(id).getBoundingClientRect();
+              return [id, { x: r.x, y: r.y, width: r.width, height: r.height }];
+            }),
+          );
+          state.window = {
+            screenX,
+            screenY,
+            outerWidth,
+            outerHeight,
+            innerWidth,
+            innerHeight,
+          };
+          state.text = state.text.slice(0, 8192);
+          state.events = state.events.slice(-30);
+          try {
+            await fetch("/fixture/state", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(state),
+            });
+          } catch {
+          } finally {
+            pending = false;
+          }
+        }
+        setInterval(report, 150);
+        report();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+# POC preservation
+
+The repository began with an unborn main and no tracked files or remote. The first curated commit preserves the existing POC source, documentation, fixtures and tests. `reference/poc` and the annotated `poc-baseline-2026-10-30` tag identify that baseline before compute development.
+
+The source baseline deliberately excludes generated evidence, logs, node_modules, caches, Python bytecode, transfer scratch files, VM build outputs/disks/state, archives and executable build outputs. Those files remain local. Local inventory and hashes are in `artifacts/bootstrap/`; that directory is intentionally untracked. Existing POC images and containers were preserved. Docker Desktop was later force-restarted with Kevin's approval to recover its unresponsive Engine; affected POC containers and previously stopped n8n containers were restored to their intended running/stopped states. No blanket git add, Docker prune or guest replacement was performed.
+
+A Git branch is source preservation, not a disk/image backup. Ignored evidence and runtime assets still require a separately managed backup. Running guest disks were inventoried, not copied or claimed crash-consistent. No off-host backup or publication was performed. The exact local transport/image prerequisites described in the POC recipes remain necessary to reproduce historical images; mutable package repositories do not recreate old builds byte-for-byte.

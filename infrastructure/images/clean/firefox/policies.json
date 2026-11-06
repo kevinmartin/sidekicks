@@ -1,0 +1,22 @@
+{
+  "policies": {
+    "DisableTelemetry": true,
+    "DontCheckDefaultBrowser": true,
+    "NoDefaultBookmarks": true,
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "DisableFirefoxAccounts": true,
+    "OfferToSaveLogins": false,
+    "Permissions": {
+      "Camera": {"BlockNewRequests": true},
+      "Microphone": {"BlockNewRequests": true}
+    },
+    "Homepage": {
+      "URL": "http://127.0.0.1:8081/home",
+      "StartPage": "homepage"
+    },
+    "Preferences": {
+      "browser.tabs.inTitlebar": {"Value": 0, "Status": "locked"}
+    }
+  }
+}

@@ -1,0 +1,20 @@
+/* Original Sidekicks accents over the installed Adwaita GTK3 theme.
+ * No OrbitOS assets, fonts, CSS or branding are copied. */
+@define-color theme_selected_bg_color #168fcb;
+@define-color theme_selected_fg_color #ffffff;
+@define-color selected_bg_color #168fcb;
+@define-color selected_fg_color #ffffff;
+@define-color theme_bg_color #f5fafc;
+@define-color theme_fg_color #24465b;
+@define-color theme_base_color #ffffff;
+@define-color theme_text_color #24465b;
+window { background-color: #f5fafc; }
+toolbar { background: #f5fafc; border-bottom: 1px solid #d8e8ef; padding: 6px; }
+toolbar button { border-radius: 6px; }
+entry { border-radius: 6px; }
+.sidebar, .sidebar .view, placessidebar { background-color: #edf6fb; color: #30566b; }
+treeview.view { padding: 3px; }
+.view:selected, .view:selected:focus { background-color: #168fcb; color: white; }
+menu { background: #fbfdff; color: #24465b; }
+menuitem { padding: 6px 10px; }
+menuitem:hover { background: #dceffa; }

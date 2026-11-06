@@ -1,0 +1,65 @@
+:root {
+  font: 14px system-ui;
+  color: #e7f7ff;
+  background: #10263d;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  flex-wrap: wrap;
+  background: #16334e;
+}
+button {
+  font: inherit;
+  padding: 7px 12px;
+  border: 1px solid #6ebce3;
+  border-radius: 8px;
+  background: #d9f4ff;
+  color: #123047;
+  cursor: pointer;
+}
+#status {
+  margin-left: auto;
+  font-size: 12px;
+}
+main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+main:fullscreen {
+  background: #10263d;
+}
+main > div,
+main > video {
+  max-width: 100%;
+  max-height: 100%;
+}
+video {
+  object-fit: contain;
+}
+canvas {
+  outline: none;
+}
+#media[data-observer="true"] * {
+  cursor: none !important;
+}
+#media {
+  width: 100%;
+  height: 100%;
+}

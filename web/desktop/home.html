@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en" data-sidekicks-home="sky-v1">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sidekicks · Home</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #23475d;
+        --soft: #6e8fa0;
+        --cyan: #10add4;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        overflow-x: hidden;
+        font-family: Arial, "DejaVu Sans", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(
+          ellipse at 50% 2%,
+          #fff 0%,
+          #effbff 45%,
+          #e5f4fb 100%
+        );
+      }
+      header {
+        position: absolute;
+        top: 29px;
+        left: 36px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 17px;
+        letter-spacing: -0.5px;
+        font-weight: 700;
+      }
+      .brand-dot {
+        width: 22px;
+        height: 22px;
+        border: 5px solid #1db5d9;
+        border-radius: 8px;
+        transform: rotate(-14deg);
+      }
+      main {
+        position: relative;
+        max-width: 820px;
+        margin: auto;
+        padding: 12vh 24px 70px;
+        text-align: center;
+      }
+      .date {
+        font-size: 13px;
+        letter-spacing: 1.4px;
+        color: #7195a6;
+        text-transform: uppercase;
+      }
+      #clock {
+        font-size: clamp(56px, 8vw, 88px);
+        font-weight: 400;
+        line-height: 1.25;
+        letter-spacing: -5px;
+        color: #294e64;
+        margin: 12px 0 4px;
+        font-variant-numeric: tabular-nums;
+      }
+      h1 {
+        font-size: 20px;
+        line-height: 1.5;
+        font-weight: 400;
+        margin: 4px 0 42px;
+        color: #668b9d;
+      }
+      .apps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 34px;
+        max-width: 580px;
+        margin: auto;
+      }
+      .app {
+        appearance: none;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        gap: 15px;
+        border: 1px solid transparent;
+        border-radius: 24px;
+        padding: 22px 8px 21px;
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+        transition:
+          background 0.15s,
+          border-color 0.15s,
+          transform 0.15s;
+      }
+      .app:hover {
+        background: #ffffffa0;
+        border-color: #c8e7f2;
+        transform: translateY(-3px);
+      }
+      .app:focus-visible {
+        outline: 3px solid #21b3d6;
+        outline-offset: 4px;
+      }
+      .app svg {
+        width: 76px;
+        height: 76px;
+        filter: drop-shadow(0 8px 11px #0d6b9b16);
+      }
+      .app strong {
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .app small {
+        display: block;
+        font-size: 11px;
+        color: #7d9caa;
+        margin-top: -8px;
+      }
+      .app:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+      .app:disabled:hover {
+        transform: none;
+      }
+      #status {
+        height: 22px;
+        margin: 25px 0 0;
+        font-size: 12px;
+        color: #668b9d;
+      }
+      .links {
+        position: fixed;
+        bottom: 24px;
+        left: 32px;
+        right: 32px;
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        font-size: 11px;
+        color: #86a4b2;
+      }
+      .links a {
+        color: #6c92a4;
+        text-decoration: none;
+      }
+      .links a:hover {
+        color: #148eb4;
+        text-decoration: underline;
+      }
+      .art {
+        position: fixed;
+        pointer-events: none;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -0;
+        opacity: 0.4;
+      }
+      header,
+      main,
+      .links {
+        z-index: 1;
+      }
+      .links {
+        align-items: center;
+      }
+      .local {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+      }
+      .local:before {
+        content: "";
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #5cccb8;
+      }
+      @media (max-height: 570px) {
+        main {
+          padding: 44px 24px 30px;
+        }
+        .date {
+          font-size: 11px;
+        }
+        #clock {
+          font-size: 52px;
+          line-height: 1.15;
+          margin: 3px 0;
+        }
+        h1 {
+          font-size: 16px;
+          margin: 2px 0 20px;
+        }
+        .app {
+          padding: 8px;
+          gap: 8px;
+        }
+        .app svg {
+          width: 56px;
+          height: 56px;
+        }
+        .app small {
+          display: none;
+        }
+        #status {
+          height: 18px;
+          margin: 12px 0 0;
+        }
+      }
+      @media (max-width: 560px) {
+        header {
+          top: 20px;
+          left: 22px;
+        }
+        main {
+          padding-top: 95px;
+        }
+        .apps {
+          gap: 4px;
+        }
+        .app small {
+          display: none;
+        }
+        .links {
+          left: 20px;
+          right: 20px;
+        }
+        .app svg {
+          width: 60px;
+          height: 60px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg
+      class="art"
+      viewBox="0 0 1200 760"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+    >
+      <g fill="none" stroke="#9ed4e6" stroke-width="1.3">
+        <path d="M-90 570c155-160 238 65 320-40s-50-123 31-203" />
+        <path d="M-74 590c155-160 238 65 320-40s-50-123 31-203" />
+        <path d="M960-70c-160 173 91 211 10 331s-160 62-116 170" />
+        <path d="M979-60c-160 173 91 211 10 331s-160 62-116 170" />
+        <circle cx="1040" cy="593" r="80" />
+        <circle cx="1040" cy="593" r="96" />
+        <path d="m970 593 141-63m-79-5 33 133" />
+        <path d="M219 89v22m-11-11h22m642 467v18m-9-9h18" />
+      </g>
+    </svg>
+    <header><span class="brand-dot" aria-hidden="true"></span>Sidekicks</header>
+    <main>
+      <div id="date" class="date"></div>
+      <div id="clock" aria-label="Current time"></div>
+      <h1 id="greeting">Welcome to your desktop.</h1>
+      <div class="apps" aria-label="Installed applications">
+        <button class="app" data-app="browser">
+          <svg viewBox="0 0 256 256" aria-hidden="true">
+            <defs>
+              <linearGradient id="b" x2=".8" y2="1">
+                <stop stop-color="#12cde6" />
+                <stop offset="1" stop-color="#1578ef" />
+              </linearGradient>
+            </defs>
+            <rect
+              x="16"
+              y="16"
+              width="224"
+              height="224"
+              rx="54"
+              fill="#e9fbff"
+            />
+            <rect
+              x="33"
+              y="40"
+              width="190"
+              height="173"
+              rx="27"
+              fill="url(#b)"
+            />
+            <path d="M34 76h188" stroke="#fff" stroke-width="8" />
+            <g fill="#fff">
+              <circle cx="54" cy="59" r="5" />
+              <circle cx="73" cy="59" r="5" />
+              <circle cx="92" cy="59" r="5" />
+            </g>
+            <g fill="none" stroke="#fff" stroke-width="8">
+              <circle cx="128" cy="142" r="47" />
+              <ellipse cx="128" cy="142" rx="20" ry="47" />
+              <path d="M84 126h88m-88 33h88" />
+            </g></svg
+          ><strong>Browser</strong><small>Browse the web</small>
+        </button>
+        <button class="app" data-app="terminal">
+          <svg viewBox="0 0 256 256" aria-hidden="true">
+            <rect
+              x="16"
+              y="16"
+              width="224"
+              height="224"
+              rx="54"
+              fill="#bbe8f6"
+            />
+            <rect
+              x="33"
+              y="42"
+              width="190"
+              height="172"
+              rx="26"
+              fill="#18354f"
+            />
+            <path d="M34 78h188" stroke="#55728a" stroke-width="6" />
+            <g fill="#9cecff">
+              <circle cx="54" cy="60" r="5" />
+              <circle cx="73" cy="60" r="5" />
+              <circle cx="92" cy="60" r="5" />
+            </g>
+            <path
+              d="m64 110 31 28-31 28m54 0h57"
+              fill="none"
+              stroke="#d6fcff"
+              stroke-width="12"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+          ><strong>Terminal</strong><small>Run tools</small>
+        </button>
+        <button class="app" data-app="files">
+          <svg viewBox="0 0 256 256" aria-hidden="true">
+            <rect
+              x="16"
+              y="16"
+              width="224"
+              height="224"
+              rx="54"
+              fill="#d8f5ff"
+            />
+            <path
+              d="M38 75q0-19 19-19h48l22 24h71q19 0 19 19v94q0 18-19 18H57q-19 0-19-18z"
+              fill="#087fc5"
+            />
+            <path
+              d="M38 104q0-17 17-17h146q17 0 17 17l-7 88q-1 18-19 18H62q-18 0-19-18z"
+              fill="#31b8e4"
+            />
+            <path
+              d="M58 113h141"
+              stroke="#bef7ff"
+              stroke-width="7"
+              stroke-linecap="round"
+            />
+            <rect
+              x="105"
+              y="143"
+              width="47"
+              height="10"
+              rx="5"
+              fill="#e7fdff"
+            /></svg
+          ><strong>Files</strong><small>Explore this desktop</small>
+        </button>
+      </div>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+    <footer class="links">
+      <span class="local">Your Sidekicks desktop</span
+      ><span><a href="/fixture" id="diagnostics">Input Lab</a></span>
+    </footer>
+    <script>
+      const desktopToken = "__SIDEKICKS_DESKTOP_TOKEN__";
+      const statusElement = document.getElementById("status");
+      const available =
+        desktopToken !== ["__SIDEKICKS", "DESKTOP", "TOKEN__"].join("_") &&
+        desktopToken.length >= 16;
+      const zone = "America/New_York";
+      function updateTime() {
+        const now = new Date();
+        document.getElementById("clock").textContent = new Intl.DateTimeFormat(
+          "en-US",
+          { timeZone: zone, hour: "numeric", minute: "2-digit", hour12: false },
+        ).format(now);
+        document.getElementById("date").textContent = new Intl.DateTimeFormat(
+          "en-US",
+          { timeZone: zone, weekday: "long", month: "long", day: "numeric" },
+        ).format(now);
+        const h = Number(
+          new Intl.DateTimeFormat("en-US", {
+            timeZone: zone,
+            hour: "numeric",
+            hourCycle: "h23",
+          }).format(now),
+        );
+        document.getElementById("greeting").textContent =
+          h < 12
+            ? "Good morning. Make yourself at home."
+            : h < 18
+              ? "Good afternoon. Make yourself at home."
+              : "Good evening. Make yourself at home.";
+      }
+      updateTime();
+      setInterval(updateTime, 1000);
+      for (const button of document.querySelectorAll("[data-app]")) {
+        button.disabled = !available;
+        button.addEventListener("click", async () => {
+          const app = button.dataset.app;
+          button.disabled = true;
+          statusElement.textContent = "Opening " + app + "…";
+          try {
+            const response = await fetch("/desktop/launch", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Sidekicks-Desktop": desktopToken,
+              },
+              body: JSON.stringify({ app }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok)
+              throw new Error(
+                response.status === 403 || response.status === 409
+                  ? "Take control in the viewer first."
+                  : data.error || "Could not open this app.",
+              );
+            statusElement.textContent = "Opening " + app + "…";
+            setTimeout(() => {
+              statusElement.textContent = "";
+            }, 2500);
+          } catch (error) {
+            statusElement.textContent = error.message;
+          } finally {
+            button.disabled = !available;
+          }
+        });
+      }
+      if (!available)
+        statusElement.textContent =
+          "Open Home inside a Sidekicks desktop to launch apps.";
+    </script>
+  </body>
+</html>
