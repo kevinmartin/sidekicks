@@ -13,7 +13,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { cleanupOwnedBrowserServer } from "./owned-child.mjs";
-import { runSequential } from "./sequence.mjs";
+import { runSequential, saveFinalResult } from "./sequence.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(
@@ -1875,15 +1875,13 @@ async function run(adapter) {
     if (lifecycleTraces.get(id)?.persistenceFailed)
       cleanup.push("Lifecycle trace persistence failed");
     result.cleanup = cleanup;
-    if (cancellationRequested) {
-      cleanup.push("Supervisor cancellation during cleanup");
-    }
     if (cleanup.length) {
       result.status = "FAIL";
       failed = true;
     }
     result.finishedAt = new Date().toISOString();
-    await save();
+    await saveFinalResult(result, save, () => cancellationRequested);
+    if (result.status === "FAIL") failed = true;
   }
   console.log(
     JSON.stringify({

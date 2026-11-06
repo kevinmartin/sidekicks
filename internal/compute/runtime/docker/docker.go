@@ -316,8 +316,11 @@ func (r *Runtime) Provision(ctx context.Context, s compute.Spec) (compute.Instan
 	if err != nil {
 		return failed(fmt.Errorf("inspect started container: %w", err))
 	}
-	if current.ID != created.ID || compute.AdapterID(current.Config.Labels[AdapterLabel]) != s.Adapter || current.State.Status != "running" {
+	if current.ID != created.ID || compute.AdapterID(current.Config.Labels[AdapterLabel]) != s.Adapter {
 		return failed(fmt.Errorf("%w: started container identity changed", compute.ErrConflict))
+	}
+	if current.State.Status != "running" {
+		return failed(fmt.Errorf("%w: started container is not running", compute.ErrConflict))
 	}
 	result, err := instance(current, s.ID)
 	if err != nil {

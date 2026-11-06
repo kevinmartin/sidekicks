@@ -6,3 +6,18 @@ export async function runSequential(targets, run, cancelled = () => false) {
   }
   return !cancelled();
 }
+
+// Preserve cancellation even if it arrives while the final result is being saved.
+export async function saveFinalResult(result, save, cancelled) {
+  const message = "Supervisor cancellation during cleanup";
+  const markCancellation = () => {
+    if (!result.cleanup.includes(message)) result.cleanup.push(message);
+    result.status = "FAIL";
+  };
+  if (cancelled()) markCancellation();
+  await save();
+  if (cancelled() && !result.cleanup.includes(message)) {
+    markCancellation();
+    await save();
+  }
+}

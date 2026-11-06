@@ -18,6 +18,7 @@ import {
   parseComparison,
   validateChildResult,
 } from "../../test/e2e/neko-audio.mjs";
+import { saveFinalResult } from "../../test/e2e/sequence.mjs";
 
 function fakeChild() {
   const child = new EventEmitter();
@@ -27,6 +28,25 @@ function fakeChild() {
   child.kill = (signal) => child.signals.push(signal);
   return child;
 }
+test("cancellation during final evidence write is saved as a failure", async () => {
+  const result = { status: "PASS", cleanup: [] };
+  const written = [];
+  let cancelled = false;
+  await saveFinalResult(
+    result,
+    async () => {
+      written.push(JSON.parse(JSON.stringify(result)));
+      cancelled = true;
+    },
+    () => cancelled,
+  );
+  assert.equal(written.length, 2);
+  assert.equal(written[0].status, "PASS");
+  assert.equal(written[1].status, "FAIL");
+  assert.deepEqual(written[1].cleanup, [
+    "Supervisor cancellation during cleanup",
+  ]);
+});
 test("owned process group is accepted only on explicit ESRCH", () => {
   const gone = (pid, signal) => {
     assert.equal(pid, -123);
