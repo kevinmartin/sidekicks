@@ -1,0 +1,5 @@
+*
+!Dockerfile
+!policies.json
+!com.sidekicks.wba.json
+!export-stagehand/main.go

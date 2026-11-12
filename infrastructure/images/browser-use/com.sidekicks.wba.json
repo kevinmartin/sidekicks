@@ -1,0 +1,7 @@
+{
+  "name": "com.sidekicks.wba",
+  "description": "Sidekicks Signing Broker bridge",
+  "path": "/opt/sidekicks/wba-native-host",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://oemdajnnbnaaffcbemfbifeojcfjgckj/"]
+}

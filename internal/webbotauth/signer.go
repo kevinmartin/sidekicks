@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,12 +12,11 @@ import (
 )
 
 type Signer struct {
-	pubKey ed25519.PublicKey
+	pubKey  ed25519.PublicKey
 	privKey ed25519.PrivateKey
-	kid string
-	expiry time.Duration
+	kid     string
+	expiry  time.Duration
 }
-
 
 func NewSigner(pubKey ed25519.PublicKey, privKey ed25519.PrivateKey) (*Signer, error) {
 	kid, err := ComputeJWKThumbprint(pubKey)
@@ -27,23 +25,23 @@ func NewSigner(pubKey ed25519.PublicKey, privKey ed25519.PrivateKey) (*Signer, e
 	}
 
 	return &Signer{
-		pubKey: pubKey,
+		pubKey:  pubKey,
 		privKey: privKey,
-		kid: kid,
-		expiry: time.Second * 30, // default expiry of 30 seconds
+		kid:     kid,
+		expiry:  time.Second * 30, // default expiry of 30 seconds
 	}, nil
 }
 
 type signerMessageComponent struct {
-	value string
+	value   string
 	request bool
 }
 
 type SignerMessage struct {
-	label string
-	httpFields map[string]signerMessageComponent
+	label             string
+	httpFields        map[string]signerMessageComponent
 	derivedComponents map[string]signerMessageComponent
-	parameters map[string]string
+	parameters        map[string]string
 }
 
 type SignerMessageOption func(sm *SignerMessage, req *http.Request)
@@ -52,7 +50,7 @@ func WithHeader(key string, request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		lowerKey := strings.ToLower(key)
 		sm.httpFields[lowerKey] = signerMessageComponent{
-			value: req.Header.Get(key),
+			value:   req.Header.Get(key),
 			request: request,
 		}
 	}
@@ -61,7 +59,7 @@ func WithHeader(key string, request bool) SignerMessageOption {
 func WithAuthority(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@authority"] = signerMessageComponent{
-			value: req.Host,
+			value:   req.Host,
 			request: request,
 		}
 	}
@@ -70,7 +68,7 @@ func WithAuthority(request bool) SignerMessageOption {
 func WithTargetURI(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@target-uri"] = signerMessageComponent{
-			value: req.URL.String(),
+			value:   req.URL.String(),
 			request: request,
 		}
 	}
@@ -79,7 +77,7 @@ func WithTargetURI(request bool) SignerMessageOption {
 func WithMethod(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@method"] = signerMessageComponent{
-			value: req.Method,
+			value:   req.Method,
 			request: request,
 		}
 	}
@@ -87,8 +85,12 @@ func WithMethod(request bool) SignerMessageOption {
 
 func WithPath(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
+		path := req.URL.EscapedPath()
+		if path == "" {
+			path = "/"
+		}
 		sm.derivedComponents["@path"] = signerMessageComponent{
-			value: req.URL.Path,
+			value:   path,
 			request: request,
 		}
 	}
@@ -97,7 +99,7 @@ func WithPath(request bool) SignerMessageOption {
 func WithScheme(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@scheme"] = signerMessageComponent{
-			value: req.URL.Scheme,
+			value:   req.URL.Scheme,
 			request: request,
 		}
 	}
@@ -106,7 +108,7 @@ func WithScheme(request bool) SignerMessageOption {
 func WithQuery(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@query"] = signerMessageComponent{
-			value: req.URL.RawQuery,
+			value:   "?" + req.URL.RawQuery,
 			request: request,
 		}
 	}
@@ -143,10 +145,10 @@ func WithSignatureAgent(signatureAgent string) SignerMessageOption {
 
 func (s *Signer) Sign(req *http.Request, sms ...SignerMessageOption) (http.Header, error) {
 	sm := &SignerMessage{
-		label: "sig1",
-		httpFields: make(map[string]signerMessageComponent),
+		label:             "sig1",
+		httpFields:        make(map[string]signerMessageComponent),
 		derivedComponents: make(map[string]signerMessageComponent),
-		parameters: make(map[string]string),
+		parameters:        make(map[string]string),
 	}
 	for _, smsOption := range sms {
 		smsOption(sm, req)
@@ -172,7 +174,7 @@ func (s *Signer) Sign(req *http.Request, sms ...SignerMessageOption) (http.Heade
 		if v.request {
 			param = ";req"
 		}
-	
+
 		sigInputComponents = append(sigInputComponents, fmt.Sprintf(`"%s"%s`, k, param))
 		sigInputValues = append(sigInputValues, fmt.Sprintf(`"%s"%s: %s`, k, param, v.value))
 	}
@@ -190,8 +192,6 @@ func (s *Signer) Sign(req *http.Request, sms ...SignerMessageOption) (http.Heade
 
 	signatureBytes := ed25519.Sign(s.privKey, []byte(strings.Join(sigInputValues, "\n")))
 	signatureB64 := base64.StdEncoding.EncodeToString(signatureBytes)
-
-	log.Printf("Signature Base:\n%s\n", strings.Join(sigInputValues, "\n"))
 
 	headers := http.Header{}
 	headers.Set("Signature-Input", fmt.Sprintf("%s=%s", sm.label, sigInput))
