@@ -329,7 +329,13 @@ func (f *fixture) origin() http.Handler {
 	mux.HandleFunc(signedHost+"/", f.signed(signedPage))
 	mux.HandleFunc(unsignedHost+"/", unsignedPage)
 	mux.HandleFunc("/", unexpectedDestination)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+	routes := http.NewServeMux()
+	// Kubelet probes the pod IP directly, outside the fixture's signing hosts.
+	routes.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	routes.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		f.record(r.URL.Query().Get("run"), "origin "+r.URL.Path)
 		w.Header().Set("Cache-Control", "no-store")
 		// ServeMux matches the hostname after stripping its port.
@@ -339,6 +345,7 @@ func (f *fixture) origin() http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+	return routes
 }
 
 func unexpectedDestination(w http.ResponseWriter, _ *http.Request) {

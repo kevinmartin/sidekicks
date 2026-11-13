@@ -118,7 +118,9 @@ spec:
             - name: fixture-https
               containerPort: 8443
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
               port: fixture-https
             periodSeconds: 2
           securityContext:
