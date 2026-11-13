@@ -131,28 +131,25 @@ jobs:
           go-version-file: go.mod
           # The Go job already caches these dependencies.
           cache: false
+      - name: Allow Chromium to create its sandbox on Ubuntu
+        run: |
+          if [[ $(sysctl -n -e kernel.apparmor_restrict_unprivileged_userns) == 1 ]]; then
+            # Match the Chromium executable inside the Debian browser image.
+            sudo apparmor_parser -r <<'APPARMOR'
+          abi <abi/4.0>,
+          include <tunables/global>
+
+          profile sidekicks-ci-chromium /usr/lib/chromium/chromium flags=(unconfined) {
+            userns,
+          }
+          APPARMOR
+          fi
       - name: Deploy the built images to kind
         id: deploy
         run: |
           export KUBECONFIG="$RUNNER_TEMP/sidekicks-kubeconfig"
           printf 'KUBECONFIG=%s\n' "$KUBECONFIG" >> "$GITHUB_ENV"
-          kind_config="$RUNNER_TEMP/sidekicks-kind.yaml"
-          cat > "$kind_config" <<'KIND'
-          apiVersion: kind.x-k8s.io/v1alpha4
-          kind: Cluster
-          nodes:
-            - role: control-plane
-          KIND
-          if [[ -d /sys/kernel/security/apparmor ]]; then
-            # Kubelet detects AppArmor through securityfs at startup.
-            cat >> "$kind_config" <<'KIND'
-              extraMounts:
-                - hostPath: /sys/kernel/security
-                  containerPath: /sys/kernel/security
-                  readOnly: true
-          KIND
-          fi
-          kind create cluster --name "$KIND_CLUSTER" --wait 120s --config "$kind_config" \
+          kind create cluster --name "$KIND_CLUSTER" --wait 120s \
             --image kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
           kind load docker-image --name "$KIND_CLUSTER" sidekicks-browser-use:ci sidekicks-browser-dev-tools:ci
 
@@ -163,30 +160,6 @@ jobs:
               sidekicks-browser-use=sidekicks-browser-use:ci \
               sidekicks-browser-dev-tools=sidekicks-browser-dev-tools:ci
           )
-          if [[ -d /sys/kernel/security/apparmor ]]; then
-            # Ubuntu restricts user namespaces. Grant Chromium access through a pod-specific profile.
-            sudo apparmor_parser -r <<'APPARMOR'
-          abi <abi/4.0>,
-          include <tunables/global>
-
-          profile sidekicks-ci-chromium flags=(attach_disconnected,mediate_deleted) {
-            include <abstractions/base>
-            network,
-            capability,
-            file,
-            signal (receive) peer=unconfined,
-            signal (receive) peer=runc,
-            signal (send,receive) peer=sidekicks-ci-chromium,
-            ptrace (trace,tracedby,read,readby) peer=sidekicks-ci-chromium,
-            deny mount,
-            userns,
-          }
-          APPARMOR
-            kubectl patch --local -f build/dev/deployment.yaml --type=strategic \
-              -p '{"spec":{"template":{"spec":{"containers":[{"name":"browser","securityContext":{"appArmorProfile":{"type":"Localhost","localhostProfile":"sidekicks-ci-chromium"}}}]}}}}' \
-              -o yaml > build/dev/deployment.patched.yaml
-            mv build/dev/deployment.patched.yaml build/dev/deployment.yaml
-          fi
           kubectl apply -k build/dev
           kubectl -n sidekicks-dev rollout status deployment/browser-use --timeout=120s
       - name: Run browser integration tests
