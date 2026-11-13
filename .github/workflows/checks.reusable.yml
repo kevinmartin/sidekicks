@@ -147,6 +147,31 @@ jobs:
               sidekicks-browser-use=sidekicks-browser-use:ci \
               sidekicks-browser-dev-tools=sidekicks-browser-dev-tools:ci
           )
+          if [[ -r /sys/module/apparmor/parameters/enabled ]] &&
+            [[ $(</sys/module/apparmor/parameters/enabled) == Y ]]; then
+            # Ubuntu restricts user namespaces. Grant Chromium access through a pod-specific profile.
+            sudo apparmor_parser -r <<'APPARMOR'
+          abi <abi/4.0>,
+          include <tunables/global>
+
+          profile sidekicks-ci-chromium flags=(attach_disconnected,mediate_deleted) {
+            include <abstractions/base>
+            network,
+            capability,
+            file,
+            signal (receive) peer=unconfined,
+            signal (receive) peer=runc,
+            signal (send,receive) peer=sidekicks-ci-chromium,
+            ptrace (trace,tracedby,read,readby) peer=sidekicks-ci-chromium,
+            deny mount,
+            userns,
+          }
+          APPARMOR
+            kubectl patch --local -f build/dev/deployment.yaml --type=strategic \
+              -p '{"spec":{"template":{"spec":{"containers":[{"name":"browser","securityContext":{"appArmorProfile":{"type":"Localhost","localhostProfile":"sidekicks-ci-chromium"}}}]}}}}' \
+              -o yaml > build/dev/deployment.patched.yaml
+            mv build/dev/deployment.patched.yaml build/dev/deployment.yaml
+          fi
           kubectl apply -k build/dev
           kubectl -n sidekicks-dev rollout status deployment/browser-use --timeout=120s
       - name: Run browser integration tests
@@ -192,6 +217,7 @@ jobs:
           kubectl -n sidekicks-dev get events --sort-by=.lastTimestamp || true
           kubectl -n sidekicks-dev logs deployment/browser-use --all-containers --prefix --tail=100 || true
           kubectl -n sidekicks-dev logs deployment/browser-use --all-containers --previous --prefix --tail=100 || true
+          sudo journalctl -k --grep='apparmor=.*DENIED' --no-pager -n 30 || true
       - name: Delete the kind cluster
         if: always() && steps.deploy.outcome != 'skipped'
         run: kind delete cluster --name "$KIND_CLUSTER"
