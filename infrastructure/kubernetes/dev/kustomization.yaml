@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sidekicks-dev
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - services.yaml
+images:
+  - name: sidekicks-browser-use
+    newTag: latest
+  - name: sidekicks-browser-dev-tools
+    newTag: latest
+configMapGenerator:
+  - name: sidekicks-browser-settings
+    envs:
+      - browser.env
+replacements:
+  - source:
+      kind: ConfigMap
+      name: sidekicks-browser-settings
+      fieldPath: data.WBA_BROKER_DIR
+    targets:
+      - select:
+          kind: Deployment
+          name: browser-use
+        fieldPaths:
+          - spec.template.spec.containers.[name=browser].volumeMounts.[name=broker].mountPath
+          - spec.template.spec.containers.[name=wba-fixture].volumeMounts.[name=broker].mountPath
+  - source:
+      kind: ConfigMap
+      name: sidekicks-browser-settings
+      fieldPath: data.BROWSER_GATEWAY_LISTEN_PORT
+    targets:
+      - select:
+          kind: Deployment
+          name: browser-use
+        fieldPaths:
+          - spec.template.spec.containers.[name=gateway].ports.[name=gateway].containerPort
+  - source:
+      kind: ConfigMap
+      name: sidekicks-browser-settings
+      fieldPath: data.WBA_FIXTURE_PORT
+    targets:
+      - select:
+          kind: Deployment
+          name: browser-use
+        fieldPaths:
+          - spec.template.spec.containers.[name=wba-fixture].ports.[name=fixture-https].containerPort
+      - select:
+          kind: Service
+        fieldPaths:
+          - spec.ports.0.port
+secretGenerator:
+  - name: sidekicks-dev-config
+    files:
+      - gateway-token
+      - tls.crt
+      - tls.key
+      - fixture-spki

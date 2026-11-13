@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "lib": ["ES2022", "WebWorker"],
+    "types": ["chrome"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmitOnError": true,
+    "verbatimModuleSyntax": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"]
+}

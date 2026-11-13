@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: browser-use
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: browser-use
+  template:
+    metadata:
+      labels:
+        app: browser-use
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 2000
+        runAsGroup: 2000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: browser
+          image: sidekicks-browser-use
+          imagePullPolicy: Never
+          args:
+            - --remote-debugging-address=$(BROWSER_CDP_HOST)
+            - --remote-debugging-port=$(BROWSER_CDP_PORT)
+            - --ignore-certificate-errors-spki-list=$(WBA_FIXTURE_SPKI)
+            - about:blank
+          envFrom:
+            - configMapRef:
+                name: sidekicks-browser-settings
+          env:
+            - name: WBA_BROKER_SOCKET
+              value: $(WBA_BROKER_DIR)/broker.sock
+            - name: WBA_FIXTURE_SPKI
+              valueFrom:
+                secretKeyRef:
+                  name: sidekicks-dev-config
+                  key: fixture-spki
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            # Local smoke configuration for Chromium's user-namespace sandbox.
+            seccompProfile:
+              type: Unconfined
+          volumeMounts:
+            - name: profile
+              mountPath: /home/browser
+            - name: tmp
+              mountPath: /tmp
+            - name: shm
+              mountPath: /dev/shm
+            - name: broker
+              mountPath: /run/sidekicks/wba
+              readOnly: true
+        - name: gateway
+          image: sidekicks-browser-dev-tools
+          imagePullPolicy: Never
+          command: [/browser-gateway]
+          envFrom:
+            - configMapRef:
+                name: sidekicks-browser-settings
+          env:
+            - name: BROWSER_CDP_ADDRESS
+              value: $(BROWSER_CDP_HOST):$(BROWSER_CDP_PORT)
+            - name: BROWSER_GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sidekicks-dev-config
+                  key: gateway-token
+          ports:
+            - name: gateway
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: gateway
+            periodSeconds: 2
+            timeoutSeconds: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+        - name: wba-fixture
+          image: sidekicks-browser-dev-tools
+          imagePullPolicy: Never
+          command: [/wba-fixture]
+          envFrom:
+            - configMapRef:
+                name: sidekicks-browser-settings
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: WBA_BROKER_SOCKET
+              value: $(WBA_BROKER_DIR)/broker.sock
+            - name: WBA_FIXTURE_SIGNED_HOST
+              value: signed.$(POD_NAMESPACE).$(WBA_FIXTURE_DNS_SUFFIX)
+            - name: WBA_FIXTURE_UNSIGNED_HOST
+              value: unsigned.$(POD_NAMESPACE).$(WBA_FIXTURE_DNS_SUFFIX)
+            - name: WBA_FIXTURE_BLOCKED_HOST
+              value: blocked.$(POD_NAMESPACE).$(WBA_FIXTURE_DNS_SUFFIX)
+            - name: BROWSER_GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sidekicks-dev-config
+                  key: gateway-token
+          ports:
+            - name: fixture-https
+              containerPort: 8443
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
+              port: fixture-https
+            periodSeconds: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: broker
+              mountPath: /run/sidekicks/wba
+            - name: fixture-tls
+              mountPath: /etc/sidekicks/dev
+              readOnly: true
+      volumes:
+        - name: profile
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+        - name: broker
+          emptyDir: {}
+        - name: fixture-tls
+          secret:
+            secretName: sidekicks-dev-config
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
