@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG GO_IMAGE=golang:1.27.3-bookworm
-FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-bookworm AS go-build
 ARG TARGETOS
 ARG TARGETARCH
 ENV CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH

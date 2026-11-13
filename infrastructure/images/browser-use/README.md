@@ -129,6 +129,6 @@ workload. The production extension should be force-installed under a stable ID.
 Debian's packaged Chromium includes the runtime libraries and browser data;
 APT owns the dependency inventory. Rebuild regularly with a fresh base and
 package install (`--pull --no-cache`), record the Chromium version, generate
-and scan an SBOM, and deploy the tested image by digest. CI can override
-`DEBIAN_IMAGE` with an approved Debian base digest. A digest pin on the base
-alone does not freeze APT's package versions.
+and scan an SBOM, and deploy the tested image by digest. Dependabot tracks the
+base images declared in the Dockerfile. A digest pin on the base alone does
+not freeze APT's package versions.

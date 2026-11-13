@@ -1,0 +1,14 @@
+name: Merge
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.reusable.yml
+    with:
+      base_sha: ${{ github.event.created && github.sha || github.event.before }}
