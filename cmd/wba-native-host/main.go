@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -40,10 +41,10 @@ func run() error {
 	if timeout <= 0 {
 		return errors.New("WBA_BROKER_TIMEOUT must be positive")
 	}
-	return relay(os.Stdin, os.Stdout, brokerConfig{socket: socket, timeout: timeout})
+	return relay(context.Background(), os.Stdin, os.Stdout, brokerConfig{socket: socket, timeout: timeout})
 }
 
-func relay(input io.Reader, output io.Writer, config brokerConfig) error {
+func relay(ctx context.Context, input io.Reader, output io.Writer, config brokerConfig) error {
 	var size uint32
 	if err := binary.Read(input, binary.NativeEndian, &size); err != nil {
 		return fmt.Errorf("read native message size: %w", err)
@@ -59,12 +60,16 @@ func relay(input io.Reader, output io.Writer, config brokerConfig) error {
 		return errors.New("invalid native message")
 	}
 
-	deadline := time.Now().Add(config.timeout)
-	conn, err := net.DialTimeout("unix", config.socket, config.timeout)
+	ctx, cancel := context.WithTimeout(ctx, config.timeout)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", config.socket)
 	if err != nil {
 		return fmt.Errorf("connect to signing broker: %w", err)
 	}
 	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
 		return fmt.Errorf("set broker exchange deadline: %w", err)
 	}

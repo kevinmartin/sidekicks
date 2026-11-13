@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"runtime/debug"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -117,8 +119,20 @@ func testTabReadinessLease(t *testing.T) {
 func checkReadinessMessage(t *testing.T, f *fixture, message string, sentAt time.Time, wantOK bool) {
 	t.Helper()
 	client, server := net.Pipe()
+	ctx := t.Context()
+	var broker sync.WaitGroup
+	defer broker.Wait()
 	defer client.Close()
-	go f.serveBroker(server)
+	broker.Go(func() {
+		defer func() {
+			if panicValue := recover(); panicValue != nil {
+				t.Errorf("broker panic: %v\n%s", panicValue, debug.Stack())
+			}
+		}()
+		if err := f.serveBroker(ctx, server); err != nil {
+			t.Errorf("serve broker: %v", err)
+		}
+	})
 	if err := client.SetDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}

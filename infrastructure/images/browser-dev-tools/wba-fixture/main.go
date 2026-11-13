@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/subtle"
 	"encoding/base64"
@@ -15,9 +16,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/kevinmartin/sidekicks/internal/webbotauth"
@@ -53,13 +57,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := runFixture(ctx, cfg, token); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runFixture(ctx context.Context, cfg config, token string) error {
 	key, err := webbotauth.GenerateEd25519KeyPair()
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("generate fixture signing key: %w", err)
 	}
 	signer, err := webbotauth.NewSigner(key.PublicKey, key.PrivateKey)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("create fixture signer: %w", err)
 	}
 	f := &fixture{
 		config: cfg,
@@ -69,45 +81,80 @@ func main() {
 	}
 	// An emptyDir survives a container restart within the same pod.
 	if err := os.Remove(cfg.socketPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Fatal(err)
+		return fmt.Errorf("remove old broker socket: %w", err)
 	}
-	socket, err := net.Listen("unix", cfg.socketPath)
+	var workers sync.WaitGroup
+	defer workers.Wait()
+	socket, err := (&net.ListenConfig{}).Listen(ctx, "unix", cfg.socketPath)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("listen on broker socket: %w", err)
 	}
+	defer socket.Close()
 	if err := os.Chmod(cfg.socketPath, 0660); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("set broker socket permissions: %w", err)
 	}
-	go func() {
-		ticker := time.NewTicker(cfg.readinessLease)
-		defer ticker.Stop()
-		for now := range ticker.C {
-			f.expireReadiness(now)
-		}
-	}()
-	go func() {
-		for {
-			conn, err := socket.Accept()
-			if err != nil {
-				log.Fatal(err)
-			}
-			go f.serveBroker(conn)
-		}
-	}()
-	go func() {
-		server := &http.Server{
-			Addr:              cfg.observerAddr,
-			Handler:           f.observer(token),
-			ReadHeaderTimeout: 3 * time.Second,
-		}
-		log.Fatal(server.ListenAndServe())
-	}()
-	server := &http.Server{
+	observer := &http.Server{
+		Addr:              cfg.observerAddr,
+		Handler:           f.observer(token),
+		ReadHeaderTimeout: 3 * time.Second,
+	}
+	defer observer.Close()
+	origin := &http.Server{
 		Addr:              net.JoinHostPort("", cfg.port),
 		Handler:           f.origin(),
 		ReadHeaderTimeout: 3 * time.Second,
 	}
-	log.Fatal(server.ListenAndServeTLS(cfg.tlsCert, cfg.tlsKey))
+	defer origin.Close()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	failures := make(chan error, 4)
+	failFixture := func(err error) { failures <- err }
+	start := func(name string, report func(error), work func() error) {
+		workers.Go(func() {
+			defer func() {
+				if panicValue := recover(); panicValue != nil {
+					report(fmt.Errorf("%s panic: %v\n%s", name, panicValue, debug.Stack()))
+				}
+			}()
+			if err := work(); err != nil && ctx.Err() == nil {
+				report(fmt.Errorf("%s: %w", name, err))
+			}
+		})
+	}
+	start("readiness cleanup", failFixture, func() error {
+		ticker := time.NewTicker(cfg.readinessLease)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case now := <-ticker.C:
+				f.expireReadiness(now)
+			}
+		}
+	})
+	start("broker listener", failFixture, func() error {
+		for {
+			conn, err := socket.Accept()
+			if err != nil {
+				return err
+			}
+			start("broker connection", func(err error) { log.Print(err) }, func() error {
+				return f.serveBroker(ctx, conn)
+			})
+		}
+	})
+	start("fixture observer", failFixture, observer.ListenAndServe)
+	start("fixture HTTPS origin", failFixture, func() error {
+		return origin.ListenAndServeTLS(cfg.tlsCert, cfg.tlsKey)
+	})
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-failures:
+		return err
+	}
 }
 
 func (f *fixture) expireReadiness(now time.Time) {
@@ -177,9 +224,13 @@ func (f *fixture) observer(token string) http.Handler {
 	})
 }
 
-func (f *fixture) serveBroker(conn net.Conn) {
+func (f *fixture) serveBroker(ctx context.Context, conn net.Conn) error {
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(f.config.brokerTimeout))
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	if err := conn.SetDeadline(time.Now().Add(f.config.brokerTimeout)); err != nil {
+		return fmt.Errorf("set broker connection deadline: %w", err)
+	}
 	var message struct {
 		ID       string `json:"id"`
 		Type     string `json:"type"`
@@ -189,7 +240,7 @@ func (f *fixture) serveBroker(conn net.Conn) {
 		SentAtMS int64  `json:"sentAtMs"`
 	}
 	if err := json.NewDecoder(io.LimitReader(conn, 32<<10)).Decode(&message); err != nil || message.ID == "" {
-		return
+		return nil
 	}
 	response := map[string]any{
 		"id": message.ID,
@@ -226,7 +277,7 @@ func (f *fixture) serveBroker(conn net.Conn) {
 		}
 		f.mu.Unlock()
 	case "sign":
-		req, err := http.NewRequest(message.Method, message.URL, nil)
+		req, err := http.NewRequestWithContext(ctx, message.Method, message.URL, nil)
 		if err != nil || req.URL.Scheme != "https" || req.URL.User != nil ||
 			(req.Host != signedAuthority && req.Host != blockedAuthority) ||
 			(req.Method != http.MethodGet && req.Method != http.MethodHead) {
@@ -234,8 +285,13 @@ func (f *fixture) serveBroker(conn net.Conn) {
 		}
 		if req.URL.Path == "/timeout" {
 			f.record(req.URL.Query().Get("run"), "broker timeout")
-			time.Sleep(1500 * time.Millisecond)
-			return
+			timer := time.NewTimer(1500 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+			case <-timer.C:
+			}
+			return nil
 		}
 		headers, err := f.signer.Sign(
 			req,
@@ -256,7 +312,10 @@ func (f *fixture) serveBroker(conn net.Conn) {
 			}
 		}
 	}
-	_ = json.NewEncoder(conn).Encode(response)
+	if err := json.NewEncoder(conn).Encode(response); err != nil {
+		return fmt.Errorf("write broker response: %w", err)
+	}
+	return nil
 }
 
 func (f *fixture) origin() http.Handler {
