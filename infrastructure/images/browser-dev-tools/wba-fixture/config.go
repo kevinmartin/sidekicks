@@ -46,8 +46,8 @@ func loadConfig() (config, error) {
 	if !filepath.IsAbs(cfg.SocketPath) || !filepath.IsAbs(cfg.TLSCert) || !filepath.IsAbs(cfg.TLSKey) {
 		return config{}, errors.New("fixture socket and TLS files must have absolute paths")
 	}
-	if cfg.Port == 0 || cfg.ObserverPort == 0 {
-		return config{}, errors.New("WBA_FIXTURE_PORT and WBA_OBSERVER_PORT must be nonzero")
+	if cfg.Port == 0 || cfg.ObserverPort == 0 || cfg.Port == cfg.ObserverPort {
+		return config{}, errors.New("WBA_FIXTURE_PORT and WBA_OBSERVER_PORT must be nonzero and distinct")
 	}
 	if lease := cfg.ReadinessLease.Milliseconds(); lease < 3 || lease > 2_147_483_647 {
 		return config{}, errors.New("WBA_FIXTURE_READINESS_LEASE is outside the extension timer range")
