@@ -1,0 +1,197 @@
+name: Checks
+
+on:
+  workflow_call:
+    inputs:
+      base_sha:
+        description: Commit to compare for Go formatting and lint. Defaults to the first parent.
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A main update can land multiple commits, so its base may be older than HEAD^.
+          fetch-depth: ${{ inputs.base_sha != '' && '0' || '2' }}
+          persist-credentials: false
+      - name: Resolve the Go comparison base
+        id: go_diff
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+        run: |
+          base=$(git rev-parse --verify --end-of-options "${BASE_SHA:-HEAD^}^{commit}")
+          printf 'base=%s\n' "$base" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Check Go formatting
+        env:
+          BASE_SHA: ${{ steps.go_diff.outputs.base }}
+        run: |
+          unformatted=$(git diff --name-only --diff-filter=ACMRT -z "$BASE_SHA" HEAD -- '*.go' | xargs -0 -r gofmt -l --)
+          if [[ -n "$unformatted" ]]; then
+            printf 'Run gofmt on these files\n%s\n' "$unformatted"
+            exit 1
+          fi
+      - name: Vet Go packages
+        run: go vet ./...
+      - name: Run Go unit tests
+        run: make test
+      - name: Build Go packages
+        run: go build ./...
+      - name: Lint Go changes
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          args: --new-from-rev=${{ steps.go_diff.outputs.base }}
+
+  extension:
+    name: Chrome extension
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: extensions/sidekicks/package-lock.json
+      - name: Check and build the extension
+        working-directory: extensions/sidekicks
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run lint --if-present
+          npm test --if-present
+          npm run build
+          find dist -type f -name '*.js' -print0 | xargs -0 -r -n 1 node --check
+          node --input-type=commonjs <<'NODE'
+          const assert = require('node:assert/strict');
+          const { statSync } = require('node:fs');
+          const { join } = require('node:path');
+          const manifest = require('./dist/manifest.json');
+
+          assert.equal(manifest.manifest_version, 3);
+          assert.equal(manifest.background.type, 'module');
+          assert.ok(statSync(join('dist', manifest.background.service_worker)).isFile());
+          NODE
+
+  kubernetes:
+    name: Kubernetes manifests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Render and validate the development overlay
+        run: |
+          archive="$RUNNER_TEMP/kubeconform-linux-amd64.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 --output "$archive" \
+            https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          printf '%s  %s\n' 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883 "$archive" | sha256sum -c
+          tar -xzf "$archive" -C "$RUNNER_TEMP" kubeconform
+
+          make kubernetes-config
+          kustomize build build/dev | "$RUNNER_TEMP/kubeconform" -strict -summary -kubernetes-version 1.36.0
+
+  images:
+    name: Container images and browser integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      KIND_CLUSTER: sidekicks-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the images
+        run: |
+          for image in browser-use browser-dev-tools; do
+            docker buildx build --load \
+              --build-context sidekicks_src=. \
+              --tag "sidekicks-${image}:ci" \
+              "infrastructure/images/${image}"
+          done
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # The Go job already caches these dependencies.
+          cache: false
+      - name: Deploy the built images to kind
+        id: deploy
+        run: |
+          export KUBECONFIG="$RUNNER_TEMP/sidekicks-kubeconfig"
+          printf 'KUBECONFIG=%s\n' "$KUBECONFIG" >> "$GITHUB_ENV"
+          kind create cluster --name "$KIND_CLUSTER" --wait 120s \
+            --image kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+          kind load docker-image --name "$KIND_CLUSTER" sidekicks-browser-use:ci sidekicks-browser-dev-tools:ci
+
+          make kubernetes-config
+          (
+            cd build/dev
+            kustomize edit set image \
+              sidekicks-browser-use=sidekicks-browser-use:ci \
+              sidekicks-browser-dev-tools=sidekicks-browser-dev-tools:ci
+          )
+          kubectl apply -k build/dev
+          kubectl -n sidekicks-dev rollout status deployment/browser-use --timeout=120s
+      - name: Run browser integration tests
+        run: |
+          source infrastructure/kubernetes/dev/browser.env
+
+          export BROWSER_GATEWAY_URL=http://127.0.0.1:18080
+          export WBA_FIXTURE_URL=http://127.0.0.1:18081
+          export BROWSER_CDP_ADDRESS="$BROWSER_CDP_HOST:$BROWSER_CDP_PORT"
+          BROWSER_GATEWAY_TOKEN=$(<build/dev/gateway-token)
+          test -n "$BROWSER_GATEWAY_TOKEN"
+          echo "::add-mask::$BROWSER_GATEWAY_TOKEN"
+          export BROWSER_GATEWAY_TOKEN
+
+          forward_log="$RUNNER_TEMP/browser-port-forward.log"
+          kubectl -n sidekicks-dev port-forward --address 127.0.0.1 deployment/browser-use \
+            "18080:$BROWSER_GATEWAY_LISTEN_PORT" "18081:$WBA_OBSERVER_PORT" >"$forward_log" 2>&1 &
+          forward_pid=$!
+          trap 'kill "$forward_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if ! kill -0 "$forward_pid" 2>/dev/null; then
+              cat "$forward_log"
+              exit 1
+            fi
+            if curl --fail --silent --max-time 2 "$BROWSER_GATEWAY_URL/healthz" >/dev/null &&
+              curl --fail --silent --max-time 2 -H "Authorization: Bearer $BROWSER_GATEWAY_TOKEN" \
+                "$WBA_FIXTURE_URL/origins" >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == 30 ]]; then
+              cat "$forward_log"
+              echo 'Timed out waiting for the browser gateway and fixture'
+              exit 1
+            fi
+            sleep 1
+          done
+
+          go test -v -count=1 -tags=integration -timeout=5m ./infrastructure/images/browser-use
+      - name: Show Kubernetes diagnostics
+        if: failure() && steps.deploy.outcome != 'skipped'
+        run: |
+          kubectl -n sidekicks-dev get pods -o wide || true
+          kubectl -n sidekicks-dev get events --sort-by=.lastTimestamp || true
+          kubectl -n sidekicks-dev logs deployment/browser-use --all-containers --prefix --tail=100 || true
+          kubectl -n sidekicks-dev logs deployment/browser-use --all-containers --previous --prefix --tail=100 || true
+      - name: Delete the kind cluster
+        if: always() && steps.deploy.outcome != 'skipped'
+        run: kind delete cluster --name "$KIND_CLUSTER"

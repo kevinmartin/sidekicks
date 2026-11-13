@@ -1,6 +1,4 @@
 # syntax=docker/dockerfile:1
-ARG DEBIAN_IMAGE=debian:trixie-slim
-ARG GO_IMAGE=golang:1.27.3-bookworm
 
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS extension-build
 WORKDIR /build
@@ -10,7 +8,7 @@ COPY --from=sidekicks_src /extensions/sidekicks/manifest.json /extensions/sideki
 COPY --from=sidekicks_src /extensions/sidekicks/src/ ./src/
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-bookworm AS go-build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
@@ -21,7 +19,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     go run ./export-stagehand /out/stagehand && \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -o /out/wba-native-host ./cmd/wba-native-host
 
-FROM ${DEBIAN_IMAGE} AS browser-use
+FROM debian:trixie-slim AS browser-use
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
