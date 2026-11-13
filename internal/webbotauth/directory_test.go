@@ -39,3 +39,15 @@ func TestSignedDirectoryHandlerJSON(t *testing.T) {
 		t.Fatalf("Content-Digest = %q, want %q", got, wantDigest)
 	}
 }
+
+func TestSignedDirectoryHandlerInvalidAgentURL(t *testing.T) {
+	keyPair, err := webbotauth.GenerateEd25519KeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = webbotauth.SignedDirectoryHandler("https://[invalid", "ai", []webbotauth.Ed25519KeyPair{keyPair})
+	if err == nil {
+		t.Fatal("expected an error for a malformed signature agent URL")
+	}
+}

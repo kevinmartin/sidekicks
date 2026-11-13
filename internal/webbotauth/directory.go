@@ -72,7 +72,10 @@ func SignedDirectoryHandler(sigAgent, purpose string, keyPairs []Ed25519KeyPair)
 			return nil, fmt.Errorf("failed to create signer for key %d: %w", i, err)
 		}
 
-		req, err := http.NewRequest("GET", sigAgent+"/.well-known/http-message-signatures-directory", nil)
+		req, err := http.NewRequest(http.MethodGet, sigAgent+"/.well-known/http-message-signatures-directory", nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create directory signature request: %w", err)
+		}
 		req.Header.Set("Content-Digest", contentDigestHeader)
 
 		label := fmt.Sprintf("sig%d", i+1)
