@@ -3,7 +3,8 @@ import type { Protocol } from "devtools-protocol";
 const nativeHost = "com.sidekicks.wba";
 const signatureHeaders = ["Signature", "Signature-Input", "Signature-Agent"] as const;
 const reservedHeaders = new Set<string>(signatureHeaders.map((name) => name.toLowerCase()));
-const brokerRetryDelays = [250, 500, 1000, 2000, 2000];
+const maxBrokerRetryDelay = 2000;
+const brokerRetryDelays = [250, 500, 1000, maxBrokerRetryDelay, maxBrokerRetryDelay];
 
 interface TabState {
   rootFrameId?: Protocol.Page.FrameId;
@@ -14,7 +15,12 @@ interface TabState {
 type BrokerRequest =
   | { type: "configure" }
   | {
-      type: "ready" | "retire";
+      type: "ready";
+      targetId: string;
+      sentAtMs: number;
+    }
+  | {
+      type: "retire";
       targetId: string;
     }
   | {
@@ -57,8 +63,8 @@ async function retryBroker(
       return await broker(request);
     } catch (error) {
       const delay = brokerRetryDelays[retries++];
-      if (delay === undefined) throw error;
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (delay === undefined && request.type !== "configure") throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay ?? maxBrokerRetryDelay));
     }
   }
 }
@@ -87,6 +93,7 @@ async function maintainReadiness(tabId: number, state: TabState, targetId: strin
     const response = await retryBroker({
       type: "ready",
       targetId,
+      sentAtMs: Date.now(),
     }, stillAttached);
     if (!response || !stillAttached()) return;
     const { leaseMs } = response;

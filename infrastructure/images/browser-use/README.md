@@ -105,12 +105,14 @@ sequenceDiagram
     end
 ```
 
-The extension evaluates each redirect hop independently. It retries broker
-startup failures while the tab is still blank. An attached tab renews its
+The extension evaluates each redirect hop independently. It keeps retrying
+broker configuration while the tab is still blank. An attached tab renews its
 readiness lease every four seconds. The fixture expires readiness after
 twelve seconds without renewal. Closing a prepared tab or losing its
 debugger attachment retires it immediately once the fixture receives the
-notification. Use a fresh blank tab for signed navigation after a detach.
+notification. The fixture retains that retirement for twelve seconds and
+rejects readiness messages older than twelve seconds. Use a fresh blank tab
+for signed navigation after a detach.
 
 The browser runs with a read-only root filesystem and dropped capabilities.
 The local Kubernetes manifest uses an unconfined outer seccomp profile for

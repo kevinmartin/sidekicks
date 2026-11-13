@@ -59,7 +59,9 @@ func TestStagehandWBA(t *testing.T) {
 	}
 	gotoTitle := func(url, title string) {
 		t.Helper()
-		if resp, err := page.Goto(ctx, url, nil); err != nil || resp == nil || resp.Status() != http.StatusOK {
+		// Wait for the fixture's iframe and image before navigating away.
+		options := &stagehand.PageNavigationOptions{WaitUntil: new(stagehand.LoadStateLoad)}
+		if resp, err := page.Goto(ctx, url, options); err != nil || resp == nil || resp.Status() != http.StatusOK {
 			t.Fatalf("navigate to %s: response %v, error %v", url, resp, err)
 		}
 		if got, err := page.Title(ctx); err != nil || got != title {
@@ -157,7 +159,7 @@ func sendTargetCommand(ctx context.Context, conn *websocket.Conn, id int, method
 		"method": method,
 		"params": params,
 	}); err != nil {
-		return "", err
+		return "", fmt.Errorf("write CDP command %s: %w", method, err)
 	}
 	for {
 		var reply struct {
@@ -170,7 +172,7 @@ func sendTargetCommand(ctx context.Context, conn *websocket.Conn, id int, method
 			} `json:"error"`
 		}
 		if err := wsjson.Read(ctx, conn, &reply); err != nil {
-			return "", err
+			return "", fmt.Errorf("read CDP reply for %s: %w", method, err)
 		}
 		if reply.ID == id {
 			if reply.Error != nil {

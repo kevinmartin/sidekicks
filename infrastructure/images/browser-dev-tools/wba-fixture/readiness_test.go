@@ -15,7 +15,7 @@ func TestTabReadinessLease(t *testing.T) {
 }
 
 func testTabReadinessLease(t *testing.T) {
-	f := &fixture{ready: make(map[string]time.Time)}
+	f := &fixture{ready: make(map[string]tabReadiness)}
 	observer := f.observer("test-token")
 
 	for _, step := range []struct {
@@ -69,8 +69,9 @@ func testTabReadinessLease(t *testing.T) {
 		},
 	} {
 		time.Sleep(step.after)
+		f.expireReadiness(time.Now())
 		if step.message != "" {
-			checkReadinessMessage(t, f, step.message, step.ok)
+			checkReadinessMessage(t, f, step.message, time.Now(), step.ok)
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "/readiness?targetId=tab", nil)
@@ -88,9 +89,27 @@ func testTabReadinessLease(t *testing.T) {
 				step.message, recorder.Code, recorder.Body, step.ready, step.retired)
 		}
 	}
+
+	staleReady := time.Now()
+	time.Sleep(readinessLease)
+	f.expireReadiness(time.Now())
+	if len(f.ready) != 0 {
+		t.Fatal("expired retirement is still stored")
+	}
+	checkReadinessMessage(t, f, "ready", staleReady, false)
+	if len(f.ready) != 0 {
+		t.Fatal("stale ready message recreated an expired retirement")
+	}
+
+	checkReadinessMessage(t, f, "ready", time.Now(), true)
+	time.Sleep(readinessLease)
+	f.expireReadiness(time.Now())
+	if len(f.ready) != 0 {
+		t.Fatal("expired active lease is still stored")
+	}
 }
 
-func checkReadinessMessage(t *testing.T, f *fixture, message string, wantOK bool) {
+func checkReadinessMessage(t *testing.T, f *fixture, message string, sentAt time.Time, wantOK bool) {
 	t.Helper()
 	client, server := net.Pipe()
 	defer client.Close()
@@ -98,10 +117,11 @@ func checkReadinessMessage(t *testing.T, f *fixture, message string, wantOK bool
 	if err := client.SetDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.NewEncoder(client).Encode(map[string]string{
+	if err := json.NewEncoder(client).Encode(map[string]any{
 		"id":       "request",
 		"type":     message,
 		"targetId": "tab",
+		"sentAtMs": sentAt.UnixMilli(),
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,12 +39,17 @@ type observation struct {
 	event string
 }
 
+type tabReadiness struct {
+	expires time.Time
+	retired bool
+}
+
 type fixture struct {
 	signer *webbotauth.Signer
 	public ed25519.PublicKey
 	mu     sync.Mutex
 	recent []observation
-	ready  map[string]time.Time
+	ready  map[string]tabReadiness
 }
 
 func main() {
@@ -61,7 +68,7 @@ func main() {
 	f := &fixture{
 		signer: signer,
 		public: key.PublicKey,
-		ready:  make(map[string]time.Time),
+		ready:  make(map[string]tabReadiness),
 	}
 	// An emptyDir survives a container restart within the same pod.
 	if err := os.Remove(socketPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -74,6 +81,13 @@ func main() {
 	if err := os.Chmod(socketPath, 0660); err != nil {
 		log.Fatal(err)
 	}
+	go func() {
+		ticker := time.NewTicker(readinessLease)
+		defer ticker.Stop()
+		for now := range ticker.C {
+			f.expireReadiness(now)
+		}
+	}()
 	go func() {
 		for {
 			conn, err := socket.Accept()
@@ -97,6 +111,14 @@ func main() {
 		ReadHeaderTimeout: 3 * time.Second,
 	}
 	log.Fatal(server.ListenAndServeTLS("/etc/sidekicks/dev/tls.crt", "/etc/sidekicks/dev/tls.key"))
+}
+
+func (f *fixture) expireReadiness(now time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	maps.DeleteFunc(f.ready, func(_ string, state tabReadiness) bool {
+		return !now.Before(state.expires)
+	})
 }
 
 func (f *fixture) record(key, event string) {
@@ -127,12 +149,13 @@ func (f *fixture) observer(token string) http.Handler {
 	mux.HandleFunc("GET /readiness", func(w http.ResponseWriter, r *http.Request) {
 		targetID := r.URL.Query().Get("targetId")
 		f.mu.Lock()
-		expires, exists := f.ready[targetID]
+		state := f.ready[targetID]
 		f.mu.Unlock()
+		current := time.Now().Before(state.expires)
 		w.Header().Set("Cache-Control", "no-store")
 		_ = json.NewEncoder(w).Encode(map[string]bool{
-			"ready":   time.Now().Before(expires),
-			"retired": exists && expires.IsZero(),
+			"ready":   current && !state.retired,
+			"retired": current && state.retired,
 		})
 	})
 	mux.HandleFunc("GET /observations", func(w http.ResponseWriter, r *http.Request) {
@@ -166,6 +189,7 @@ func (f *fixture) serveBroker(conn net.Conn) {
 		Method   string `json:"method"`
 		URL      string `json:"url"`
 		TargetID string `json:"targetId"`
+		SentAtMS int64  `json:"sentAtMs"`
 	}
 	if err := json.NewDecoder(io.LimitReader(conn, 32<<10)).Decode(&message); err != nil || message.ID == "" {
 		return
@@ -184,12 +208,20 @@ func (f *fixture) serveBroker(conn net.Conn) {
 			break
 		}
 		f.mu.Lock()
+		now := time.Now()
+		state := f.ready[message.TargetID]
+		sentAt := time.UnixMilli(message.SentAtMS)
 		if message.Type == "retire" {
-			f.ready[message.TargetID] = time.Time{}
+			f.ready[message.TargetID] = tabReadiness{
+				expires: now.Add(readinessLease),
+				retired: true,
+			}
 			response["ok"] = true
-		} else if expires, exists := f.ready[message.TargetID]; !exists || !expires.IsZero() {
-			// Retain retired targets so a late ready message cannot resurrect them.
-			f.ready[message.TargetID] = time.Now().Add(readinessLease)
+		} else if !sentAt.After(now) && now.Before(sentAt.Add(readinessLease)) &&
+			!(state.retired && now.Before(state.expires)) {
+			// Ready messages sent before retirement expire by the time the
+			// retirement record can be removed. Both processes use the pod clock.
+			f.ready[message.TargetID] = tabReadiness{expires: now.Add(readinessLease)}
 			response["ok"] = true
 			response["leaseMs"] = readinessLease.Milliseconds()
 		}
@@ -335,7 +367,7 @@ func hasWBAHeaders(headers http.Header) bool {
 // The fixture accepts only the components and label used in this test.
 func verifyWBA(r *http.Request, publicKey ed25519.PublicKey) error {
 	params, ok := strings.CutPrefix(r.Header.Get("Signature-Input"), "sig1=(")
-	componentList, _, found := strings.Cut(params, ");")
+	componentList, metadata, found := strings.Cut(params, ");")
 	if !ok || !found || r.Header.Get("Signature-Agent") != fmt.Sprintf("%q", wbaDirectory) {
 		return errors.New("unexpected signature input or agent")
 	}
@@ -365,6 +397,24 @@ func verifyWBA(r *http.Request, publicKey ed25519.PublicKey) error {
 	raw, err := base64.StdEncoding.DecodeString(sig)
 	if !ok || !ended || err != nil || !ed25519.Verify(publicKey, []byte(strings.Join(lines, "\n")), raw) {
 		return errors.New("invalid signature")
+	}
+	var expiry time.Time
+	for parameter := range strings.SplitSeq(metadata, ";") {
+		value, found := strings.CutPrefix(parameter, "expires=")
+		if !found {
+			continue
+		}
+		unix, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || !expiry.IsZero() {
+			return errors.New("invalid signature expiration")
+		}
+		expiry = time.Unix(unix, 0)
+	}
+	if expiry.IsZero() {
+		return errors.New("missing signature expiration")
+	}
+	if !time.Now().Before(expiry) {
+		return errors.New("expired signature")
 	}
 	return nil
 }
