@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,8 +16,6 @@ import (
 
 	stagehand "github.com/browserbase/stagehand/packages/sdk-go/v4"
 )
-
-const guestCDP = "127.0.0.1:9222"
 
 var devClient = &http.Client{Timeout: 5 * time.Second}
 
@@ -78,9 +77,10 @@ func devBrowserSockets(t *testing.T, ctx context.Context) (gatewaySocket, guestS
 	}
 	readDevJSON(t, ctx, gateway+"/json/version", &version)
 	guestURL, err := url.Parse(version.URL)
-	if err != nil || guestURL.Scheme != "ws" || guestURL.Host != guestCDP ||
+	guestCDP := os.Getenv("BROWSER_CDP_ADDRESS")
+	if err != nil || guestURL.Scheme != "ws" || !net.ParseIP(guestURL.Hostname()).IsLoopback() || guestURL.Host != guestCDP ||
 		!strings.HasPrefix(guestURL.Path, "/devtools/browser/") {
-		t.Fatalf("unexpected Chromium discovery URL %q", version.URL)
+		t.Fatalf("unexpected Chromium discovery URL %q, expected guest loopback address %q", version.URL, guestCDP)
 	}
 	return "ws" + strings.TrimPrefix(gateway, "http") + guestURL.EscapedPath(), guestURL.String()
 }

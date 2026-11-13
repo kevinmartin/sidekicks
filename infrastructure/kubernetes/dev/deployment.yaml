@@ -27,9 +27,16 @@ spec:
           image: sidekicks-browser-use
           imagePullPolicy: Never
           args:
+            - --remote-debugging-address=$(BROWSER_CDP_HOST)
+            - --remote-debugging-port=$(BROWSER_CDP_PORT)
             - --ignore-certificate-errors-spki-list=$(WBA_FIXTURE_SPKI)
             - about:blank
+          envFrom:
+            - configMapRef:
+                name: sidekicks-browser-settings
           env:
+            - name: WBA_BROKER_SOCKET
+              value: $(WBA_BROKER_DIR)/broker.sock
             - name: WBA_FIXTURE_SPKI
               valueFrom:
                 secretKeyRef:
@@ -57,7 +64,12 @@ spec:
           image: sidekicks-browser-dev-tools
           imagePullPolicy: Never
           command: [/browser-gateway]
+          envFrom:
+            - configMapRef:
+                name: sidekicks-browser-settings
           env:
+            - name: BROWSER_CDP_ADDRESS
+              value: $(BROWSER_CDP_HOST):$(BROWSER_CDP_PORT)
             - name: BROWSER_GATEWAY_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -81,7 +93,22 @@ spec:
           image: sidekicks-browser-dev-tools
           imagePullPolicy: Never
           command: [/wba-fixture]
+          envFrom:
+            - configMapRef:
+                name: sidekicks-browser-settings
           env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: WBA_BROKER_SOCKET
+              value: $(WBA_BROKER_DIR)/broker.sock
+            - name: WBA_FIXTURE_SIGNED_HOST
+              value: signed.$(POD_NAMESPACE).$(WBA_FIXTURE_DNS_SUFFIX)
+            - name: WBA_FIXTURE_UNSIGNED_HOST
+              value: unsigned.$(POD_NAMESPACE).$(WBA_FIXTURE_DNS_SUFFIX)
+            - name: WBA_FIXTURE_BLOCKED_HOST
+              value: blocked.$(POD_NAMESPACE).$(WBA_FIXTURE_DNS_SUFFIX)
             - name: BROWSER_GATEWAY_TOKEN
               valueFrom:
                 secretKeyRef:

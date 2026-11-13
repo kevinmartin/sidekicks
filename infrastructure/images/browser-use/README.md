@@ -21,7 +21,8 @@ restarts the existing Deployment so the pod uses the newly loaded images.
 The command then runs the localhost port-forward in the
 foreground. The gateway listens locally on port 18080 and the WBA observer
 on port 18081. Override `DEV_GATEWAY_PORT` and `DEV_FIXTURE_PORT` in both
-terminals to use different local ports.
+terminals to use different local ports. The in-pod ports, broker mount, and
+fixture settings come from `infrastructure/kubernetes/dev/browser.env`.
 
 From a second terminal, run the repository's integration suite.
 
@@ -37,11 +38,13 @@ verifiers.
 
 For a browser-only run or for CI, point the tests at an existing deployment
 with `BROWSER_GATEWAY_URL`, `WBA_FIXTURE_URL`, and
-`BROWSER_GATEWAY_TOKEN`.
+`BROWSER_GATEWAY_TOKEN`. Set `BROWSER_CDP_ADDRESS` to the expected guest
+loopback address from that deployment.
 
 ```sh
 BROWSER_GATEWAY_URL=http://127.0.0.1:18080 \
 WBA_FIXTURE_URL=http://127.0.0.1:18081 \
+BROWSER_CDP_ADDRESS=127.0.0.1:9222 \
 BROWSER_GATEWAY_TOKEN="$(cat build/dev/gateway-token)" \
 go test -v -count=1 -tags=integration ./infrastructure/images/browser-use
 ```

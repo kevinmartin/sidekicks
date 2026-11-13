@@ -39,7 +39,8 @@ COPY --from=go-build --chmod=0555 /out/wba-native-host /opt/sidekicks/wba-native
 COPY --chmod=0444 com.sidekicks.wba.json /etc/chromium/native-messaging-hosts/com.sidekicks.wba.json
 RUN test -s /opt/sidekicks/stagehand/manifest.json
 
-ENV HOME=/home/browser LANG=C.UTF-8
+ENV HOME=/home/browser LANG=C.UTF-8 \
+    WBA_BROKER_SOCKET=/run/sidekicks/wba/broker.sock WBA_BROKER_TIMEOUT=1s
 USER 2000:2000
 
 # The runtime must allow Chromium's unprivileged user-namespace sandbox.
@@ -49,8 +50,7 @@ ENTRYPOINT ["/usr/bin/chromium", \
             "--headless", "--disable-setuid-sandbox", "--no-first-run", \
             "--no-default-browser-check", "--window-size=1280,800", \
             "--user-data-dir=/home/browser/profile", \
-            "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=9222", \
             "--enable-unsafe-extension-debugging", \
             "--load-extension=/opt/sidekicks/stagehand,/opt/sidekicks/extension", \
             "--remote-allow-origins=chrome-extension://mibgiokgnjiohdeccdpmccjlfpdoliim"]
-CMD ["about:blank"]
+CMD ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=9222", "about:blank"]

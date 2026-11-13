@@ -10,12 +10,17 @@ import (
 	"time"
 )
 
+const readinessLease = 12 * time.Second
+
 func TestTabReadinessLease(t *testing.T) {
 	synctest.Test(t, testTabReadinessLease)
 }
 
 func testTabReadinessLease(t *testing.T) {
-	f := &fixture{ready: make(map[string]tabReadiness)}
+	f := &fixture{
+		config: config{readinessLease: readinessLease, brokerTimeout: 2 * time.Second},
+		ready:  make(map[string]tabReadiness),
+	}
 	observer := f.observer("test-token")
 
 	for _, step := range []struct {

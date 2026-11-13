@@ -10,23 +10,40 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 )
 
-const (
-	brokerSocket   = "/run/sidekicks/wba/broker.sock"
-	maxMessageSize = 32 << 10
-	brokerTimeout  = time.Second
-)
+const maxMessageSize = 32 << 10
+
+type brokerConfig struct {
+	socket  string
+	timeout time.Duration
+}
 
 func main() {
-	if err := relay(os.Stdin, os.Stdout); err != nil {
+	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Sidekicks WBA broker exchange failed: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func relay(input io.Reader, output io.Writer) error {
+func run() error {
+	socket := os.Getenv("WBA_BROKER_SOCKET")
+	if !filepath.IsAbs(socket) {
+		return errors.New("WBA_BROKER_SOCKET must be an absolute path")
+	}
+	timeout, err := time.ParseDuration(os.Getenv("WBA_BROKER_TIMEOUT"))
+	if err != nil {
+		return fmt.Errorf("parse WBA_BROKER_TIMEOUT: %w", err)
+	}
+	if timeout <= 0 {
+		return errors.New("WBA_BROKER_TIMEOUT must be positive")
+	}
+	return relay(os.Stdin, os.Stdout, brokerConfig{socket: socket, timeout: timeout})
+}
+
+func relay(input io.Reader, output io.Writer, config brokerConfig) error {
 	var size uint32
 	if err := binary.Read(input, binary.NativeEndian, &size); err != nil {
 		return fmt.Errorf("read native message size: %w", err)
@@ -42,8 +59,8 @@ func relay(input io.Reader, output io.Writer) error {
 		return errors.New("invalid native message")
 	}
 
-	deadline := time.Now().Add(brokerTimeout)
-	conn, err := net.DialTimeout("unix", brokerSocket, brokerTimeout)
+	deadline := time.Now().Add(config.timeout)
+	conn, err := net.DialTimeout("unix", config.socket, config.timeout)
 	if err != nil {
 		return fmt.Errorf("connect to signing broker: %w", err)
 	}

@@ -17,7 +17,9 @@ DEV_GATEWAY_TOKEN := $(DEV_BUILD_PATH)/gateway-token
 DEV_TLS_KEY := $(DEV_BUILD_PATH)/tls.key
 DEV_TLS_CERT := $(DEV_BUILD_PATH)/tls.crt
 DEV_TLS_SPKI := $(DEV_BUILD_PATH)/fixture-spki
-DEV_ORIGIN_SUFFIX := $(DEV_NAMESPACE).svc.cluster.local
+include $(DEV_MANIFESTS)/browser.env
+
+DEV_ORIGIN_SUFFIX := $(DEV_NAMESPACE).$(WBA_FIXTURE_DNS_SUFFIX)
 DEV_YAML := $(addprefix $(DEV_BUILD_PATH)/,kustomization.yaml namespace.yaml deployment.yaml services.yaml)
 
 .PHONY: keys
@@ -34,6 +36,7 @@ test  :
 .PHONY     : integration
 integration:
 	@BROWSER_GATEWAY_URL="$(BROWSER_GATEWAY_URL)" WBA_FIXTURE_URL="$(WBA_FIXTURE_URL)" \
+		BROWSER_CDP_ADDRESS="$${BROWSER_CDP_ADDRESS:-$(BROWSER_CDP_HOST):$(BROWSER_CDP_PORT)}" \
 		BROWSER_GATEWAY_TOKEN="$${BROWSER_GATEWAY_TOKEN:-$$(cat "$(DEV_GATEWAY_TOKEN)" 2>/dev/null)}" \
 		go test -v -count=1 -tags=integration ./...
 
@@ -51,7 +54,7 @@ container-build:
 		-t "$(DEV_TOOLS_IMAGE)" infrastructure/images/browser-dev-tools
 
 .PHONY           : kubernetes-config
-kubernetes-config: $(DEV_YAML) $(DEV_GATEWAY_TOKEN) $(DEV_TLS_SPKI)
+kubernetes-config: $(DEV_YAML) $(DEV_BUILD_PATH)/browser.env $(DEV_GATEWAY_TOKEN) $(DEV_TLS_SPKI)
 
 .PHONY                : kubernetes-load-images
 kubernetes-load-images:
@@ -84,7 +87,7 @@ kubernetes-apply: kubernetes-config kubernetes-load-images
 .PHONY            : kubernetes-forward
 kubernetes-forward:
 	$(DEV_KUBECTL) -n "$(DEV_NAMESPACE)" port-forward --address 127.0.0.1 deployment/browser-use \
-		$(DEV_GATEWAY_PORT):8080 $(DEV_FIXTURE_PORT):8081
+		$(DEV_GATEWAY_PORT):$(BROWSER_GATEWAY_LISTEN_PORT) $(DEV_FIXTURE_PORT):$(WBA_OBSERVER_PORT)
 
 .PHONY         : kubernetes-down
 kubernetes-down:
@@ -98,6 +101,9 @@ $(DEV_BUILD_PATH):
 $(DEV_BUILD_PATH)/%.yaml: $(DEV_MANIFESTS)/%.yaml | $(DEV_BUILD_PATH)
 	@cp "$<" "$@"
 
+$(DEV_BUILD_PATH)/browser.env: $(DEV_MANIFESTS)/browser.env | $(DEV_BUILD_PATH)
+	@cp "$<" "$@"
+
 $(DEV_GATEWAY_TOKEN): | $(DEV_BUILD_PATH)
 	@umask 077; token=$$(openssl rand -hex 32) && printf '%s' "$$token" > "$@"
 
@@ -109,7 +115,10 @@ check-dev-tls:
 
 $(DEV_TLS_CERT): $(DEV_TLS_KEY) check-dev-tls
 	@set -e; umask 077; \
-		if ! test -s "$@" || test "$<" -nt "$@" || ! openssl x509 -in "$@" -noout -checkend 86400 >/dev/null 2>&1; then \
+		if ! test -s "$@" || test "$<" -nt "$@" || \
+			! openssl x509 -in "$@" -noout -checkend 86400 >/dev/null 2>&1 || \
+			! openssl x509 -in "$@" -noout -ext subjectAltName 2>/dev/null | \
+				grep -Fq "DNS:signed.$(DEV_ORIGIN_SUFFIX), DNS:unsigned.$(DEV_ORIGIN_SUFFIX), DNS:blocked.$(DEV_ORIGIN_SUFFIX)"; then \
 			openssl req -x509 -new -key "$<" -days 30 \
 				-subj "/CN=signed.$(DEV_ORIGIN_SUFFIX)" \
 				-addext "subjectAltName=DNS:signed.$(DEV_ORIGIN_SUFFIX),DNS:unsigned.$(DEV_ORIGIN_SUFFIX),DNS:blocked.$(DEV_ORIGIN_SUFFIX)" \

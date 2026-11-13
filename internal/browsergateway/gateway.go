@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,13 +25,20 @@ type Gateway struct {
 }
 
 // New configures an authenticated proxy to Chromium on guest loopback.
-func New(token string) (*Gateway, error) {
+func New(token, cdpAddress string) (*Gateway, error) {
 	if strings.TrimSpace(token) == "" {
 		return nil, errors.New("browser gateway token is required")
 	}
+	host, port, err := net.SplitHostPort(cdpAddress)
+	if err != nil || !net.ParseIP(host).IsLoopback() {
+		return nil, errors.New("browser CDP address must contain a loopback IP and port")
+	}
+	if number, err := strconv.ParseUint(port, 10, 16); err != nil || number == 0 {
+		return nil, errors.New("browser CDP address must contain a valid TCP port")
+	}
 	upstream := &url.URL{
 		Scheme: "http",
-		Host:   "127.0.0.1:9222",
+		Host:   cdpAddress,
 	}
 	transport := &http.Transport{
 		DialContext:           (&net.Dialer{Timeout: 2 * time.Second}).DialContext,

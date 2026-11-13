@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -14,7 +16,11 @@ import (
 )
 
 func main() {
-	gateway, err := browsergateway.New(os.Getenv("BROWSER_GATEWAY_TOKEN"))
+	port := os.Getenv("BROWSER_GATEWAY_LISTEN_PORT")
+	if number, err := strconv.ParseUint(port, 10, 16); err != nil || number == 0 {
+		log.Fatal("BROWSER_GATEWAY_LISTEN_PORT must be a valid TCP port")
+	}
+	gateway, err := browsergateway.New(os.Getenv("BROWSER_GATEWAY_TOKEN"), os.Getenv("BROWSER_CDP_ADDRESS"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -23,7 +29,7 @@ func main() {
 	mux.HandleFunc("GET /json/version", gateway.Authenticate(gateway.Discovery))
 	mux.HandleFunc("GET /devtools/browser/{id}", gateway.Authenticate(gateway.WebSocket))
 	server := &http.Server{
-		Addr:              ":8080",
+		Addr:              net.JoinHostPort("", port),
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}

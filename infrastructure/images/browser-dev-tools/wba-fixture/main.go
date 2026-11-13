@@ -23,16 +23,7 @@ import (
 	"github.com/kevinmartin/sidekicks/internal/webbotauth"
 )
 
-const (
-	signedHost     = "signed.sidekicks-dev.svc.cluster.local"
-	unsignedHost   = "unsigned.sidekicks-dev.svc.cluster.local"
-	blockedHost    = "blocked.sidekicks-dev.svc.cluster.local"
-	wbaDirectory   = "https://wba.sidekicks.test"
-	fixturePort    = ":8443"
-	socketPath     = "/run/sidekicks/wba/broker.sock"
-	existingHeader = "X-Sidekicks-Existing"
-	readinessLease = 12 * time.Second
-)
+const existingHeader = "X-Sidekicks-Existing"
 
 type observation struct {
 	key   string
@@ -45,6 +36,7 @@ type tabReadiness struct {
 }
 
 type fixture struct {
+	config config
 	signer *webbotauth.Signer
 	public ed25519.PublicKey
 	mu     sync.Mutex
@@ -57,6 +49,10 @@ func main() {
 	if token == "" {
 		log.Fatal("BROWSER_GATEWAY_TOKEN is required")
 	}
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 	key, err := webbotauth.GenerateEd25519KeyPair()
 	if err != nil {
 		log.Fatal(err)
@@ -66,23 +62,24 @@ func main() {
 		log.Fatal(err)
 	}
 	f := &fixture{
+		config: cfg,
 		signer: signer,
 		public: key.PublicKey,
 		ready:  make(map[string]tabReadiness),
 	}
 	// An emptyDir survives a container restart within the same pod.
-	if err := os.Remove(socketPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(cfg.socketPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		log.Fatal(err)
 	}
-	socket, err := net.Listen("unix", socketPath)
+	socket, err := net.Listen("unix", cfg.socketPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := os.Chmod(socketPath, 0660); err != nil {
+	if err := os.Chmod(cfg.socketPath, 0660); err != nil {
 		log.Fatal(err)
 	}
 	go func() {
-		ticker := time.NewTicker(readinessLease)
+		ticker := time.NewTicker(cfg.readinessLease)
 		defer ticker.Stop()
 		for now := range ticker.C {
 			f.expireReadiness(now)
@@ -99,18 +96,18 @@ func main() {
 	}()
 	go func() {
 		server := &http.Server{
-			Addr:              "127.0.0.1:8081",
+			Addr:              cfg.observerAddr,
 			Handler:           f.observer(token),
 			ReadHeaderTimeout: 3 * time.Second,
 		}
 		log.Fatal(server.ListenAndServe())
 	}()
 	server := &http.Server{
-		Addr:              fixturePort,
+		Addr:              net.JoinHostPort("", cfg.port),
 		Handler:           f.origin(),
 		ReadHeaderTimeout: 3 * time.Second,
 	}
-	log.Fatal(server.ListenAndServeTLS("/etc/sidekicks/dev/tls.crt", "/etc/sidekicks/dev/tls.key"))
+	log.Fatal(server.ListenAndServeTLS(cfg.tlsCert, cfg.tlsKey))
 }
 
 func (f *fixture) expireReadiness(now time.Time) {
@@ -142,8 +139,8 @@ func (f *fixture) observer(token string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /origins", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{
-			"signed":      "https://" + signedHost + fixturePort,
-			"blockedHost": blockedHost,
+			"signed":      "https://" + net.JoinHostPort(f.config.signedHost, f.config.port),
+			"blockedHost": f.config.blockedHost,
 		})
 	})
 	mux.HandleFunc("GET /readiness", func(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +179,7 @@ func (f *fixture) observer(token string) http.Handler {
 
 func (f *fixture) serveBroker(conn net.Conn) {
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(f.config.brokerTimeout))
 	var message struct {
 		ID       string `json:"id"`
 		Type     string `json:"type"`
@@ -198,7 +195,9 @@ func (f *fixture) serveBroker(conn net.Conn) {
 		"id": message.ID,
 		"ok": false,
 	}
-	signedAuthority, blockedAuthority := signedHost+fixturePort, blockedHost+fixturePort
+	signedAuthority := net.JoinHostPort(f.config.signedHost, f.config.port)
+	blockedAuthority := net.JoinHostPort(f.config.blockedHost, f.config.port)
+	readinessLease := f.config.readinessLease
 	switch message.Type {
 	case "configure":
 		response["ok"] = true
@@ -244,7 +243,7 @@ func (f *fixture) serveBroker(conn net.Conn) {
 			webbotauth.WithMethod(false),
 			webbotauth.WithPath(false),
 			webbotauth.WithQuery(false),
-			webbotauth.WithSignatureAgent(wbaDirectory),
+			webbotauth.WithSignatureAgent(f.config.directory),
 			webbotauth.WithTag("web-bot-auth"),
 			webbotauth.WithNonce(16),
 		)
@@ -261,6 +260,7 @@ func (f *fixture) serveBroker(conn net.Conn) {
 }
 
 func (f *fixture) origin() http.Handler {
+	signedHost, unsignedHost, blockedHost := f.config.signedHost, f.config.unsignedHost, f.config.blockedHost
 	mux := http.NewServeMux()
 	mux.HandleFunc(signedHost+"/favicon.ico", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -276,7 +276,7 @@ func (f *fixture) origin() http.Handler {
 		f.record(r.URL.Query().Get("run"), "origin "+r.URL.Path)
 		w.Header().Set("Cache-Control", "no-store")
 		// ServeMux matches the hostname after stripping its port.
-		if !strings.HasSuffix(r.Host, fixturePort) {
+		if !strings.HasSuffix(r.Host, ":"+f.config.port) {
 			unexpectedDestination(w, r)
 			return
 		}
@@ -299,7 +299,7 @@ func (f *fixture) unsignedSubresource(w http.ResponseWriter, r *http.Request) {
 
 func (f *fixture) signed(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := verifyWBA(r, f.public); err != nil {
+		if err := verifyWBA(r, f.public, f.config.directory); err != nil {
 			log.Print(err)
 			http.Error(w, "invalid Web Bot Auth signature", http.StatusUnauthorized)
 			return
@@ -320,10 +320,10 @@ func (f *fixture) redirectTo(host, path string) http.HandlerFunc {
 			http.Error(w, "existing cookie was lost", http.StatusBadRequest)
 			return
 		}
-		if host == blockedHost {
+		if host == f.config.blockedHost {
 			f.record(run, "verified blocked redirect")
 		}
-		location := "https://" + host + fixturePort + path + "?run=" + url.QueryEscape(run)
+		location := "https://" + net.JoinHostPort(host, f.config.port) + path + "?run=" + url.QueryEscape(run)
 		http.Redirect(w, r, location, http.StatusFound)
 	}
 }
@@ -365,10 +365,10 @@ func hasWBAHeaders(headers http.Header) bool {
 
 // verifyWBA reconstructs the signature base from the received HTTP message.
 // The fixture accepts only the components and label used in this test.
-func verifyWBA(r *http.Request, publicKey ed25519.PublicKey) error {
+func verifyWBA(r *http.Request, publicKey ed25519.PublicKey, directory string) error {
 	params, ok := strings.CutPrefix(r.Header.Get("Signature-Input"), "sig1=(")
 	componentList, metadata, found := strings.Cut(params, ");")
-	if !ok || !found || r.Header.Get("Signature-Agent") != fmt.Sprintf("%q", wbaDirectory) {
+	if !ok || !found || r.Header.Get("Signature-Agent") != fmt.Sprintf("%q", directory) {
 		return errors.New("unexpected signature input or agent")
 	}
 	path, query, _ := strings.Cut(r.RequestURI, "?")
