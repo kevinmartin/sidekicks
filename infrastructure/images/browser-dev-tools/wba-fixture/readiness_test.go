@@ -22,10 +22,14 @@ func TestTabReadinessLease(t *testing.T) {
 
 func testTabReadinessLease(t *testing.T) {
 	f := &fixture{
-		config: config{readinessLease: readinessLease, brokerTimeout: 2 * time.Second},
-		ready:  make(map[string]tabReadiness),
+		config: config{
+			Token:          "test-token",
+			ReadinessLease: readinessLease,
+			BrokerTimeout:  2 * time.Second,
+		},
+		ready: make(map[string]tabReadiness),
 	}
-	observer := f.observer("test-token")
+	observer := f.observer()
 
 	for _, step := range []struct {
 		message string

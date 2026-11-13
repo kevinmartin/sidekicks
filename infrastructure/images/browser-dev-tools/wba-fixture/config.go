@@ -3,92 +3,57 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
-	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/caarlos0/env/v11"
 )
 
 type config struct {
-	signedHost     string
-	unsignedHost   string
-	blockedHost    string
-	port           string
-	observerAddr   string
-	directory      string
-	socketPath     string
-	tlsCert        string
-	tlsKey         string
-	readinessLease time.Duration
-	brokerTimeout  time.Duration
+	Token          string        `env:"BROWSER_GATEWAY_TOKEN,required,notEmpty"`
+	SignedHost     string        `env:"WBA_FIXTURE_SIGNED_HOST,required"`
+	UnsignedHost   string        `env:"WBA_FIXTURE_UNSIGNED_HOST,required"`
+	BlockedHost    string        `env:"WBA_FIXTURE_BLOCKED_HOST,required"`
+	Port           uint16        `env:"WBA_FIXTURE_PORT,required"`
+	ObserverPort   uint16        `env:"WBA_OBSERVER_PORT,required"`
+	Directory      string        `env:"WBA_FIXTURE_DIRECTORY,required"`
+	SocketPath     string        `env:"WBA_BROKER_SOCKET,required"`
+	TLSCert        string        `env:"WBA_FIXTURE_TLS_CERT,required"`
+	TLSKey         string        `env:"WBA_FIXTURE_TLS_KEY,required"`
+	ReadinessLease time.Duration `env:"WBA_FIXTURE_READINESS_LEASE,required"`
+	BrokerTimeout  time.Duration `env:"WBA_FIXTURE_BROKER_TIMEOUT,required"`
 }
 
 func loadConfig() (config, error) {
-	cfg := config{
-		signedHost:   os.Getenv("WBA_FIXTURE_SIGNED_HOST"),
-		unsignedHost: os.Getenv("WBA_FIXTURE_UNSIGNED_HOST"),
-		blockedHost:  os.Getenv("WBA_FIXTURE_BLOCKED_HOST"),
-		directory:    os.Getenv("WBA_FIXTURE_DIRECTORY"),
-		socketPath:   os.Getenv("WBA_BROKER_SOCKET"),
-		tlsCert:      os.Getenv("WBA_FIXTURE_TLS_CERT"),
-		tlsKey:       os.Getenv("WBA_FIXTURE_TLS_KEY"),
+	var cfg config
+	if err := env.Parse(&cfg); err != nil {
+		return config{}, fmt.Errorf("load fixture configuration: %w", err)
 	}
-	for _, host := range []string{cfg.signedHost, cfg.unsignedHost, cfg.blockedHost} {
+	for _, host := range []string{cfg.SignedHost, cfg.UnsignedHost, cfg.BlockedHost} {
 		if host == "" || strings.ContainsAny(host, "/:@?#% \t\r\n") {
 			return config{}, errors.New("fixture origins must have valid hostnames")
 		}
 	}
-	if cfg.signedHost == cfg.unsignedHost || cfg.signedHost == cfg.blockedHost || cfg.unsignedHost == cfg.blockedHost {
+	if cfg.SignedHost == cfg.UnsignedHost || cfg.SignedHost == cfg.BlockedHost || cfg.UnsignedHost == cfg.BlockedHost {
 		return config{}, errors.New("fixture origins must have distinct hostnames")
 	}
-	directory, err := url.Parse(cfg.directory)
+	directory, err := url.Parse(cfg.Directory)
 	if err != nil || directory.Scheme != "https" || directory.Hostname() == "" || directory.User != nil {
 		return config{}, errors.New("WBA_FIXTURE_DIRECTORY must be an HTTPS URL")
 	}
-	if !filepath.IsAbs(cfg.socketPath) || !filepath.IsAbs(cfg.tlsCert) || !filepath.IsAbs(cfg.tlsKey) {
+	if !filepath.IsAbs(cfg.SocketPath) || !filepath.IsAbs(cfg.TLSCert) || !filepath.IsAbs(cfg.TLSKey) {
 		return config{}, errors.New("fixture socket and TLS files must have absolute paths")
 	}
-	cfg.port, err = readPort("WBA_FIXTURE_PORT")
-	if err != nil {
-		return config{}, err
+	if cfg.Port == 0 || cfg.ObserverPort == 0 {
+		return config{}, errors.New("WBA_FIXTURE_PORT and WBA_OBSERVER_PORT must be nonzero")
 	}
-	observerPort, err := readPort("WBA_OBSERVER_PORT")
-	if err != nil {
-		return config{}, err
-	}
-	cfg.observerAddr = net.JoinHostPort("127.0.0.1", observerPort)
-	cfg.readinessLease, err = readDuration("WBA_FIXTURE_READINESS_LEASE")
-	if err != nil {
-		return config{}, err
-	}
-	if cfg.readinessLease.Milliseconds() < 3 || cfg.readinessLease.Milliseconds() > 2_147_483_647 {
+	if lease := cfg.ReadinessLease.Milliseconds(); lease < 3 || lease > 2_147_483_647 {
 		return config{}, errors.New("WBA_FIXTURE_READINESS_LEASE is outside the extension timer range")
 	}
-	cfg.brokerTimeout, err = readDuration("WBA_FIXTURE_BROKER_TIMEOUT")
-	if err != nil {
-		return config{}, err
+	if cfg.BrokerTimeout <= 0 {
+		return config{}, errors.New("WBA_FIXTURE_BROKER_TIMEOUT must be positive")
 	}
 	return cfg, nil
-}
-
-func readPort(name string) (string, error) {
-	value := os.Getenv(name)
-	if port, err := strconv.ParseUint(value, 10, 16); err != nil || port == 0 {
-		return "", fmt.Errorf("%s must be a valid TCP port", name)
-	}
-	return value, nil
-}
-
-func readDuration(name string) (time.Duration, error) {
-	value, err := time.ParseDuration(os.Getenv(name))
-	if err != nil {
-		return 0, fmt.Errorf("parse %s: %w", name, err)
-	}
-	if value <= 0 {
-		return 0, fmt.Errorf("%s must be positive", name)
-	}
-	return value, nil
 }

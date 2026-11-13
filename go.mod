@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/browserbase/stagehand/packages/sdk-go/v4 v4.3.0
+	github.com/caarlos0/env/v11 v11.4.2
 	github.com/coder/websocket v1.8.13
 	github.com/stretchr/testify v1.12.1
 )

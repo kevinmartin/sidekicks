@@ -14,15 +14,25 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/caarlos0/env/v11"
 	"github.com/kevinmartin/sidekicks/internal/browsergateway"
 )
 
+type config struct {
+	ListenPort uint16 `env:"BROWSER_GATEWAY_LISTEN_PORT,required"`
+	Token      string `env:"BROWSER_GATEWAY_TOKEN,required,notEmpty"`
+	CDPAddress string `env:"BROWSER_CDP_ADDRESS,required,notEmpty"`
+}
+
 func main() {
-	port := os.Getenv("BROWSER_GATEWAY_LISTEN_PORT")
-	if number, err := strconv.ParseUint(port, 10, 16); err != nil || number == 0 {
-		log.Fatal("BROWSER_GATEWAY_LISTEN_PORT must be a valid TCP port")
+	var cfg config
+	if err := env.Parse(&cfg); err != nil {
+		log.Fatalf("load gateway configuration: %v", err)
 	}
-	gateway, err := browsergateway.New(os.Getenv("BROWSER_GATEWAY_TOKEN"), os.Getenv("BROWSER_CDP_ADDRESS"))
+	if cfg.ListenPort == 0 {
+		log.Fatal("BROWSER_GATEWAY_LISTEN_PORT must be nonzero")
+	}
+	gateway, err := browsergateway.New(cfg.Token, cfg.CDPAddress)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,7 +41,7 @@ func main() {
 	mux.HandleFunc("GET /json/version", gateway.Authenticate(gateway.Discovery))
 	mux.HandleFunc("GET /devtools/browser/{id}", gateway.Authenticate(gateway.WebSocket))
 	server := &http.Server{
-		Addr:              net.JoinHostPort("", port),
+		Addr:              net.JoinHostPort("", strconv.Itoa(int(cfg.ListenPort))),
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}

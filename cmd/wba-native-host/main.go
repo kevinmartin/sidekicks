@@ -13,13 +13,15 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/caarlos0/env/v11"
 )
 
 const maxMessageSize = 32 << 10
 
 type brokerConfig struct {
-	socket  string
-	timeout time.Duration
+	Socket  string        `env:"WBA_BROKER_SOCKET,required"`
+	Timeout time.Duration `env:"WBA_BROKER_TIMEOUT,required"`
 }
 
 func main() {
@@ -30,21 +32,20 @@ func main() {
 }
 
 func run() error {
-	socket := os.Getenv("WBA_BROKER_SOCKET")
-	if !filepath.IsAbs(socket) {
+	var cfg brokerConfig
+	if err := env.Parse(&cfg); err != nil {
+		return fmt.Errorf("load native host configuration: %w", err)
+	}
+	if !filepath.IsAbs(cfg.Socket) {
 		return errors.New("WBA_BROKER_SOCKET must be an absolute path")
 	}
-	timeout, err := time.ParseDuration(os.Getenv("WBA_BROKER_TIMEOUT"))
-	if err != nil {
-		return fmt.Errorf("parse WBA_BROKER_TIMEOUT: %w", err)
-	}
-	if timeout <= 0 {
+	if cfg.Timeout <= 0 {
 		return errors.New("WBA_BROKER_TIMEOUT must be positive")
 	}
-	return relay(context.Background(), os.Stdin, os.Stdout, brokerConfig{socket: socket, timeout: timeout})
+	return relay(context.Background(), os.Stdin, os.Stdout, cfg)
 }
 
-func relay(ctx context.Context, input io.Reader, output io.Writer, config brokerConfig) error {
+func relay(ctx context.Context, input io.Reader, output io.Writer, cfg brokerConfig) error {
 	var size uint32
 	if err := binary.Read(input, binary.NativeEndian, &size); err != nil {
 		return fmt.Errorf("read native message size: %w", err)
@@ -60,9 +61,9 @@ func relay(ctx context.Context, input io.Reader, output io.Writer, config broker
 		return errors.New("invalid native message")
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, config.timeout)
+	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	defer cancel()
-	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", config.socket)
+	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", cfg.Socket)
 	if err != nil {
 		return fmt.Errorf("connect to signing broker: %w", err)
 	}

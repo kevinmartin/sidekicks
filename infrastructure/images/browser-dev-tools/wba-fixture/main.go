@@ -41,6 +41,7 @@ type tabReadiness struct {
 
 type fixture struct {
 	config config
+	port   string
 	signer *webbotauth.Signer
 	public ed25519.PublicKey
 	mu     sync.Mutex
@@ -49,22 +50,18 @@ type fixture struct {
 }
 
 func main() {
-	token := os.Getenv("BROWSER_GATEWAY_TOKEN")
-	if token == "" {
-		log.Fatal("BROWSER_GATEWAY_TOKEN is required")
-	}
 	cfg, err := loadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := runFixture(ctx, cfg, token); err != nil {
+	if err := runFixture(ctx, cfg); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runFixture(ctx context.Context, cfg config, token string) error {
+func runFixture(ctx context.Context, cfg config) error {
 	key, err := webbotauth.GenerateEd25519KeyPair()
 	if err != nil {
 		return fmt.Errorf("generate fixture signing key: %w", err)
@@ -75,32 +72,33 @@ func runFixture(ctx context.Context, cfg config, token string) error {
 	}
 	f := &fixture{
 		config: cfg,
+		port:   strconv.Itoa(int(cfg.Port)),
 		signer: signer,
 		public: key.PublicKey,
 		ready:  make(map[string]tabReadiness),
 	}
 	// An emptyDir survives a container restart within the same pod.
-	if err := os.Remove(cfg.socketPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(cfg.SocketPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove old broker socket: %w", err)
 	}
 	var workers sync.WaitGroup
 	defer workers.Wait()
-	socket, err := (&net.ListenConfig{}).Listen(ctx, "unix", cfg.socketPath)
+	socket, err := (&net.ListenConfig{}).Listen(ctx, "unix", cfg.SocketPath)
 	if err != nil {
 		return fmt.Errorf("listen on broker socket: %w", err)
 	}
 	defer socket.Close()
-	if err := os.Chmod(cfg.socketPath, 0660); err != nil {
+	if err := os.Chmod(cfg.SocketPath, 0660); err != nil {
 		return fmt.Errorf("set broker socket permissions: %w", err)
 	}
 	observer := &http.Server{
-		Addr:              cfg.observerAddr,
-		Handler:           f.observer(token),
+		Addr:              net.JoinHostPort("127.0.0.1", strconv.Itoa(int(cfg.ObserverPort))),
+		Handler:           f.observer(),
 		ReadHeaderTimeout: 3 * time.Second,
 	}
 	defer observer.Close()
 	origin := &http.Server{
-		Addr:              net.JoinHostPort("", cfg.port),
+		Addr:              net.JoinHostPort("", f.port),
 		Handler:           f.origin(),
 		ReadHeaderTimeout: 3 * time.Second,
 	}
@@ -123,7 +121,7 @@ func runFixture(ctx context.Context, cfg config, token string) error {
 		})
 	}
 	start("readiness cleanup", failFixture, func() error {
-		ticker := time.NewTicker(cfg.readinessLease)
+		ticker := time.NewTicker(cfg.ReadinessLease)
 		defer ticker.Stop()
 		for {
 			select {
@@ -147,7 +145,7 @@ func runFixture(ctx context.Context, cfg config, token string) error {
 	})
 	start("fixture observer", failFixture, observer.ListenAndServe)
 	start("fixture HTTPS origin", failFixture, func() error {
-		return origin.ListenAndServeTLS(cfg.tlsCert, cfg.tlsKey)
+		return origin.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
 	})
 	select {
 	case <-ctx.Done():
@@ -181,13 +179,13 @@ func (f *fixture) record(key, event string) {
 	})
 }
 
-func (f *fixture) observer(token string) http.Handler {
-	expected := []byte("Bearer " + token)
+func (f *fixture) observer() http.Handler {
+	expected := []byte("Bearer " + f.config.Token)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /origins", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{
-			"signed":      "https://" + net.JoinHostPort(f.config.signedHost, f.config.port),
-			"blockedHost": f.config.blockedHost,
+			"signed":      "https://" + net.JoinHostPort(f.config.SignedHost, f.port),
+			"blockedHost": f.config.BlockedHost,
 		})
 	})
 	mux.HandleFunc("GET /readiness", func(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +226,7 @@ func (f *fixture) serveBroker(ctx context.Context, conn net.Conn) error {
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
-	if err := conn.SetDeadline(time.Now().Add(f.config.brokerTimeout)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(f.config.BrokerTimeout)); err != nil {
 		return fmt.Errorf("set broker connection deadline: %w", err)
 	}
 	var message struct {
@@ -246,9 +244,9 @@ func (f *fixture) serveBroker(ctx context.Context, conn net.Conn) error {
 		"id": message.ID,
 		"ok": false,
 	}
-	signedAuthority := net.JoinHostPort(f.config.signedHost, f.config.port)
-	blockedAuthority := net.JoinHostPort(f.config.blockedHost, f.config.port)
-	readinessLease := f.config.readinessLease
+	signedAuthority := net.JoinHostPort(f.config.SignedHost, f.port)
+	blockedAuthority := net.JoinHostPort(f.config.BlockedHost, f.port)
+	readinessLease := f.config.ReadinessLease
 	switch message.Type {
 	case "configure":
 		response["ok"] = true
@@ -299,7 +297,7 @@ func (f *fixture) serveBroker(ctx context.Context, conn net.Conn) error {
 			webbotauth.WithMethod(false),
 			webbotauth.WithPath(false),
 			webbotauth.WithQuery(false),
-			webbotauth.WithSignatureAgent(f.config.directory),
+			webbotauth.WithSignatureAgent(f.config.Directory),
 			webbotauth.WithTag("web-bot-auth"),
 			webbotauth.WithNonce(16),
 		)
@@ -319,7 +317,7 @@ func (f *fixture) serveBroker(ctx context.Context, conn net.Conn) error {
 }
 
 func (f *fixture) origin() http.Handler {
-	signedHost, unsignedHost, blockedHost := f.config.signedHost, f.config.unsignedHost, f.config.blockedHost
+	signedHost, unsignedHost, blockedHost := f.config.SignedHost, f.config.UnsignedHost, f.config.BlockedHost
 	mux := http.NewServeMux()
 	mux.HandleFunc(signedHost+"/favicon.ico", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -335,7 +333,7 @@ func (f *fixture) origin() http.Handler {
 		f.record(r.URL.Query().Get("run"), "origin "+r.URL.Path)
 		w.Header().Set("Cache-Control", "no-store")
 		// ServeMux matches the hostname after stripping its port.
-		if !strings.HasSuffix(r.Host, ":"+f.config.port) {
+		if !strings.HasSuffix(r.Host, ":"+f.port) {
 			unexpectedDestination(w, r)
 			return
 		}
@@ -358,7 +356,7 @@ func (f *fixture) unsignedSubresource(w http.ResponseWriter, r *http.Request) {
 
 func (f *fixture) signed(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := verifyWBA(r, f.public, f.config.directory); err != nil {
+		if err := verifyWBA(r, f.public, f.config.Directory); err != nil {
 			log.Print(err)
 			http.Error(w, "invalid Web Bot Auth signature", http.StatusUnauthorized)
 			return
@@ -379,10 +377,10 @@ func (f *fixture) redirectTo(host, path string) http.HandlerFunc {
 			http.Error(w, "existing cookie was lost", http.StatusBadRequest)
 			return
 		}
-		if host == f.config.blockedHost {
+		if host == f.config.BlockedHost {
 			f.record(run, "verified blocked redirect")
 		}
-		location := "https://" + net.JoinHostPort(host, f.config.port) + path + "?run=" + url.QueryEscape(run)
+		location := "https://" + net.JoinHostPort(host, f.port) + path + "?run=" + url.QueryEscape(run)
 		http.Redirect(w, r, location, http.StatusFound)
 	}
 }
