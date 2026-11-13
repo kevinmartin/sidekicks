@@ -136,7 +136,23 @@ jobs:
         run: |
           export KUBECONFIG="$RUNNER_TEMP/sidekicks-kubeconfig"
           printf 'KUBECONFIG=%s\n' "$KUBECONFIG" >> "$GITHUB_ENV"
-          kind create cluster --name "$KIND_CLUSTER" --wait 120s \
+          kind_config="$RUNNER_TEMP/sidekicks-kind.yaml"
+          cat > "$kind_config" <<'KIND'
+          apiVersion: kind.x-k8s.io/v1alpha4
+          kind: Cluster
+          nodes:
+            - role: control-plane
+          KIND
+          if [[ -d /sys/kernel/security/apparmor ]]; then
+            # Kubelet detects AppArmor through securityfs at startup.
+            cat >> "$kind_config" <<'KIND'
+              extraMounts:
+                - hostPath: /sys/kernel/security
+                  containerPath: /sys/kernel/security
+                  readOnly: true
+          KIND
+          fi
+          kind create cluster --name "$KIND_CLUSTER" --wait 120s --config "$kind_config" \
             --image kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
           kind load docker-image --name "$KIND_CLUSTER" sidekicks-browser-use:ci sidekicks-browser-dev-tools:ci
 
@@ -147,8 +163,7 @@ jobs:
               sidekicks-browser-use=sidekicks-browser-use:ci \
               sidekicks-browser-dev-tools=sidekicks-browser-dev-tools:ci
           )
-          if [[ -r /sys/module/apparmor/parameters/enabled ]] &&
-            [[ $(</sys/module/apparmor/parameters/enabled) == Y ]]; then
+          if [[ -d /sys/kernel/security/apparmor ]]; then
             # Ubuntu restricts user namespaces. Grant Chromium access through a pod-specific profile.
             sudo apparmor_parser -r <<'APPARMOR'
           abi <abi/4.0>,
