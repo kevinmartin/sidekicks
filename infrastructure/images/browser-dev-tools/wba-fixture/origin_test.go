@@ -27,10 +27,12 @@ func TestOriginReadinessProbe(t *testing.T) {
 		status int
 	}{
 		{"pod IP", "10.244.0.17:8443", http.MethodGet, http.StatusNoContent},
+		{"pod IP HEAD", "10.244.0.17:8443", http.MethodHead, http.StatusNoContent},
 		{"another IP", "10.244.0.18:8443", http.MethodGet, http.StatusForbidden},
-		{"wrong port", "10.244.0.17:9443", http.MethodGet, http.StatusForbidden},
+		{"pod IP with another Host port", "10.244.0.17:9443", http.MethodGet, http.StatusNoContent},
 		{"wrong method", "10.244.0.17:8443", http.MethodPost, http.StatusForbidden},
 		{"signed host", "signed.example.test:8443", http.MethodGet, http.StatusUnauthorized},
+		{"signed host HEAD", "signed.example.test:8443", http.MethodHead, http.StatusUnauthorized},
 		{"unsigned host", "unsigned.example.test:8443", http.MethodGet, http.StatusOK},
 		{"blocked host", "blocked.example.test:8443", http.MethodGet, http.StatusForbidden},
 		{"unknown host", "other.example.test:8443", http.MethodGet, http.StatusForbidden},
