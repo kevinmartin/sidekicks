@@ -2,10 +2,10 @@ package webbotauth
 
 import (
 	"crypto/ed25519"
-	"crypto/x509"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -29,6 +29,7 @@ func GenerateEd25519KeyPair() (Ed25519KeyPair, error) {
 }
 
 func ComputeJWKThumbprint(pubKey ed25519.PublicKey) (string, error) {
+	// Keep these fields in lexicographic JSON name order for RFC 7638.
 	canonicalJWK := struct {
 		Crv string `json:"crv"`
 		Kty string `json:"kty"`

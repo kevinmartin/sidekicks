@@ -6,7 +6,7 @@ package webbotauth_test
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"net/http"
@@ -29,9 +29,9 @@ func lookupDirectoryCLI() (string, error) {
 	}
 
 	var (
-		cargoBinDir	= filepath.Join(homeDir, ".cargo", "bin")
-		oldPath		= os.Getenv("PATH")
-		newPath		= fmt.Sprintf("%s%c%s", oldPath, os.PathListSeparator, cargoBinDir)
+		cargoBinDir = filepath.Join(homeDir, ".cargo", "bin")
+		oldPath     = os.Getenv("PATH")
+		newPath     = fmt.Sprintf("%s%c%s", oldPath, os.PathListSeparator, cargoBinDir)
 	)
 	os.Setenv("PATH", newPath)
 	defer os.Setenv("PATH", oldPath)
@@ -70,9 +70,9 @@ func newTestDirectoryServer(t *testing.T, keyPairs []webbotauth.Ed25519KeyPair) 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	t.Logf("Starting SSH tunnel to localhost.run on port %d", port)
-	t.Log("Using SSH command: ", "ssh", "-o", "StrictHostKeyChecking=no", "-R", "80:localhost:" + strconv.Itoa(port), "nokey@localhost.run")
+	t.Log("Using SSH command: ", "ssh", "-o", "StrictHostKeyChecking=no", "-R", "80:localhost:"+strconv.Itoa(port), "nokey@localhost.run")
 
-	cmd := exec.CommandContext(ctx, "ssh", "-o", "StrictHostKeyChecking=no", "-R", "80:localhost:" + strconv.Itoa(port), "nokey@localhost.run")
+	cmd := exec.CommandContext(ctx, "ssh", "-o", "StrictHostKeyChecking=no", "-R", "80:localhost:"+strconv.Itoa(port), "nokey@localhost.run")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("Failed to get stdout pipe: %v", err)
@@ -84,8 +84,8 @@ func newTestDirectoryServer(t *testing.T, keyPairs []webbotauth.Ed25519KeyPair) 
 	urlChan := make(chan string, 1)
 	go func() {
 		var (
-			scanner	= bufio.NewScanner(stdout)
-			re	= regexp.MustCompile(`https://[a-zA-Z0-9.-]+\.(localhost\.run|lhr\.life)`)
+			scanner = bufio.NewScanner(stdout)
+			re      = regexp.MustCompile(`https://[a-zA-Z0-9.-]+\.(localhost\.run|lhr\.life)`)
 		)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -124,23 +124,23 @@ func newTestDirectoryServer(t *testing.T, keyPairs []webbotauth.Ed25519KeyPair) 
 }
 
 type DirectoryValidationResponse struct {
-	Success bool `json:"success"`
+	Success bool   `json:"success"`
 	Message string `json:"message"`
 	Details struct {
-		URL string `json:"url"`
-		KeysCount int `json:"keys_count"`
+		URL           string `json:"url"`
+		KeysCount     int    `json:"keys_count"`
 		ValidatedKeys []struct {
-			Thumbprint string `json:"thumbprint"`
-			Valid bool `json:"valid"`
-			SignatureVerified bool `json:"signature_verified"`
-			RawKeyData *struct {
+			Thumbprint        string `json:"thumbprint"`
+			Valid             bool   `json:"valid"`
+			SignatureVerified bool   `json:"signature_verified"`
+			RawKeyData        *struct {
 				Kty string `json:"kty"`
 				Crv string `json:"crv"`
-				X string `json:"x"`
+				X   string `json:"x"`
 			} `json:"raw_key_data"`
 			Error *string `json:"error"`
 		} `json:"validated_keys"`
-		Errors []string `json:"errors"`
+		Errors   []string `json:"errors"`
 		Warnings []string `json:"warnings"`
 	} `json:"details"`
 }
@@ -162,15 +162,15 @@ func TestSignerWithDirectoryCLI(t *testing.T) {
 	}
 
 	table := []struct {
-		name string
+		name     string
 		keyPairs []webbotauth.Ed25519KeyPair
 	}{
 		{
-			name: "Single Key Pair",
+			name:     "Single Key Pair",
 			keyPairs: []webbotauth.Ed25519KeyPair{kp1},
 		},
 		{
-			name: "Multiple Key Pairs",
+			name:     "Multiple Key Pairs",
 			keyPairs: []webbotauth.Ed25519KeyPair{kp1, kp2},
 		},
 	}
@@ -179,7 +179,7 @@ func TestSignerWithDirectoryCLI(t *testing.T) {
 			tunnelURL, cleanup := newTestDirectoryServer(t, tt.keyPairs)
 			defer cleanup()
 
-			cmd := exec.Command(binaryPath, tunnelURL + "/.well-known/http-message-signatures-directory")
+			cmd := exec.Command(binaryPath, tunnelURL+"/.well-known/http-message-signatures-directory")
 
 			t.Logf("Executing command: %s", strings.Join(cmd.Args, " "))
 

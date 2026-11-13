@@ -4,7 +4,6 @@
 package webbotauth_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -69,22 +68,6 @@ func TestSignerWithCrawlTest(t *testing.T) {
 	}
 }
 
-type FingerprintResponse struct {
-	Status string `json:"status"`
-	Details struct {
-		Method string `json:"method"`
-		URL    string `json:"url"`
-		Headers map[string]string `json:"headers"`
-		Timestamp string `json:"timestamp"`
-		KeyID string `json:"keyId"`
-		KeySource string `json:"keySource"`
-	}
-	Errors []struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-	}
-}
-
 func TestSignerWithFingerprint(t *testing.T) {
 	kp, err := webbotauth.GenerateEd25519KeyPair()
 	if err != nil {
@@ -127,13 +110,14 @@ func TestSignerWithFingerprint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
+	defer resp.Body.Close()
 
-	var fingerprintResp FingerprintResponse
-	if err := json.NewDecoder(resp.Body).Decode(&fingerprintResp); err != nil {
+	fingerprintResp, err := decodeFingerprintResponse(resp.Body)
+	if err != nil {
 		t.Fatalf("Failed to decode response body: %v", err)
 	}
 
-	if resp.StatusCode != http.StatusOK || fingerprintResp.Status != "success"{
+	if resp.StatusCode != http.StatusOK || fingerprintResp.Status != "success" {
 		t.Logf("Status code: %v, signed-headers: %v, body: %v", resp.StatusCode, headers, fingerprintResp)
 		t.Fatalf("Unexpected response status: %v", resp.StatusCode)
 	}
