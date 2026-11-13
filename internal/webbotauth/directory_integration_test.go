@@ -6,7 +6,7 @@ package webbotauth_test
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"net/http"

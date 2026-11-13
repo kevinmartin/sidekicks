@@ -3,7 +3,8 @@ package webbotauth
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"log"
 	"net/http"
@@ -52,7 +53,12 @@ func SignedDirectoryHandler(sigAgent, purpose string, keyPairs []Ed25519KeyPair)
 		})
 	}
 
-	jsonResp, err := json.Marshal(resp)
+	// Preserve the JSON encoding used for the signed content digest.
+	jsonResp, err := json.Marshal(resp,
+		jsontext.EscapeForHTML(true),
+		jsontext.EscapeForJS(true),
+		jsontext.AllowInvalidUTF8(true),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal JSON response: %w", err)
 	}
@@ -66,7 +72,7 @@ func SignedDirectoryHandler(sigAgent, purpose string, keyPairs []Ed25519KeyPair)
 			return nil, fmt.Errorf("failed to create signer for key %d: %w", i, err)
 		}
 
-		req, err := http.NewRequest("GET", sigAgent + "/.well-known/http-message-signatures-directory", nil)
+		req, err := http.NewRequest("GET", sigAgent+"/.well-known/http-message-signatures-directory", nil)
 		req.Header.Set("Content-Digest", contentDigestHeader)
 
 		label := fmt.Sprintf("sig%d", i+1)
@@ -88,7 +94,7 @@ func SignedDirectoryHandler(sigAgent, purpose string, keyPairs []Ed25519KeyPair)
 	signatureHeader := strings.Join(signatures, ", ")
 	signatureInputHeader := strings.Join(sigInputs, ", ")
 
-	return func (w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Served %d keys with signature: %s, signature-input: %s", len(resp.Keys), signatureHeader, signatureInputHeader)
 
 		w.Header().Set("Content-Type", "application/http-message-signatures-directory+json")
