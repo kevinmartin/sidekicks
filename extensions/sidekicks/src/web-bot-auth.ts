@@ -17,7 +17,6 @@ type BrokerRequest =
   | {
       type: "ready";
       targetId: string;
-      sentAtMs: number;
     }
   | {
       type: "retire";
@@ -45,6 +44,7 @@ async function broker(request: BrokerRequest): Promise<BrokerResponse> {
   const response = await chrome.runtime.sendNativeMessage(nativeHost, {
     id,
     ...request,
+    ...(request.type === "ready" ? { sentAtMs: Date.now() } : {}),
   }) as
     BrokerResponse | undefined;
   if (response?.id !== id || response.ok !== true) {
@@ -93,7 +93,6 @@ async function maintainReadiness(tabId: number, state: TabState, targetId: strin
     const response = await retryBroker({
       type: "ready",
       targetId,
-      sentAtMs: Date.now(),
     }, stillAttached);
     if (!response || !stillAttached()) return;
     const { leaseMs } = response;
