@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 type config struct {
 	Token          string        `env:"BROWSER_GATEWAY_TOKEN,required,notEmpty"`
+	PodIP          netip.Addr    `env:"POD_IP,required,notEmpty"`
 	SignedHost     string        `env:"WBA_FIXTURE_SIGNED_HOST,required"`
 	UnsignedHost   string        `env:"WBA_FIXTURE_UNSIGNED_HOST,required"`
 	BlockedHost    string        `env:"WBA_FIXTURE_BLOCKED_HOST,required"`

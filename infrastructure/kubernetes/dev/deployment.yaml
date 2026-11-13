@@ -101,6 +101,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: WBA_BROKER_SOCKET
               value: $(WBA_BROKER_DIR)/broker.sock
             - name: WBA_FIXTURE_SIGNED_HOST
