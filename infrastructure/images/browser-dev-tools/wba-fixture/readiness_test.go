@@ -10,6 +10,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 const readinessLease = 12 * time.Second
@@ -75,6 +77,7 @@ func testTabReadinessLease(t *testing.T) {
 			retired: true,
 		},
 	} {
+		// Advance the synctest clock to exercise lease boundaries.
 		time.Sleep(step.after)
 		f.expireReadiness(time.Now())
 		if step.message != "" {
@@ -89,31 +92,25 @@ func testTabReadinessLease(t *testing.T) {
 			Ready   *bool `json:"ready"`
 			Retired *bool `json:"retired"`
 		}
-		if err := json.Unmarshal(recorder.Body.Bytes(), &status); err != nil ||
-			recorder.Code != http.StatusOK || status.Ready == nil || *status.Ready != step.ready ||
-			status.Retired == nil || *status.Retired != step.retired {
-			t.Fatalf("%s readiness = HTTP %d %s; want ready=%t, retired=%t",
-				step.message, recorder.Code, recorder.Body, step.ready, step.retired)
-		}
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &status))
+		require.NotNil(t, status.Ready, "readiness response must include ready")
+		require.NotNil(t, status.Retired, "readiness response must include retired")
+		require.Equal(t, step.ready, *status.Ready, "ready after %q", step.message)
+		require.Equal(t, step.retired, *status.Retired, "retired after %q", step.message)
 	}
 
 	staleReady := time.Now()
 	time.Sleep(readinessLease)
 	f.expireReadiness(time.Now())
-	if len(f.ready) != 0 {
-		t.Fatal("expired retirement is still stored")
-	}
+	require.Empty(t, f.ready, "expired retirement is still stored")
 	checkReadinessMessage(t, f, "ready", staleReady, false)
-	if len(f.ready) != 0 {
-		t.Fatal("stale ready message recreated an expired retirement")
-	}
+	require.Empty(t, f.ready, "stale ready message recreated an expired retirement")
 
 	checkReadinessMessage(t, f, "ready", time.Now(), true)
 	time.Sleep(readinessLease)
 	f.expireReadiness(time.Now())
-	if len(f.ready) != 0 {
-		t.Fatal("expired active lease is still stored")
-	}
+	require.Empty(t, f.ready, "expired active lease is still stored")
 }
 
 func checkReadinessMessage(t *testing.T, f *fixture, message string, sentAt time.Time, wantOK bool) {
@@ -133,25 +130,20 @@ func checkReadinessMessage(t *testing.T, f *fixture, message string, sentAt time
 			t.Errorf("serve broker: %v", err)
 		}
 	})
-	if err := client.SetDeadline(time.Now().Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.NewEncoder(client).Encode(map[string]any{
+	require.NoError(t, client.SetDeadline(time.Now().Add(time.Second)))
+	require.NoError(t, json.NewEncoder(client).Encode(map[string]any{
 		"id":       "request",
 		"type":     message,
 		"targetId": "tab",
 		"sentAtMs": sentAt.UnixMilli(),
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 	var response struct {
 		OK      bool  `json:"ok"`
 		LeaseMS int64 `json:"leaseMs"`
 	}
-	if err := json.NewDecoder(client).Decode(&response); err != nil || response.OK != wantOK {
-		t.Fatalf("%s response = %+v, %v; want ok=%t", message, response, err, wantOK)
-	}
-	if message == "ready" && wantOK && response.LeaseMS != readinessLease.Milliseconds() {
-		t.Fatalf("ready lease = %dms; want %dms", response.LeaseMS, readinessLease.Milliseconds())
+	require.NoError(t, json.NewDecoder(client).Decode(&response), "decode %s reply", message)
+	require.Equal(t, wantOK, response.OK, "ok in %s reply", message)
+	if message == "ready" && wantOK {
+		require.Equal(t, readinessLease.Milliseconds(), response.LeaseMS)
 	}
 }

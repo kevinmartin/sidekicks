@@ -22,8 +22,8 @@ var devClient = &http.Client{Timeout: 5 * time.Second}
 // TestStagehandBrowser navigates a data URL in the deployed browser.
 func TestStagehandBrowser(t *testing.T) {
 	ctx := browserTestContext(t)
-	browser := connectStagehand(t, ctx)
-	page := newTestPage(t, ctx, browser)
+	browser := connectStagehand(ctx, t)
+	page := newTestPage(ctx, t, browser)
 
 	const title = "Sidekicks Stagehand smoke"
 	fixture := "data:text/html," + url.PathEscape("<title>"+title+"</title><h1>Ready</h1>")
@@ -42,9 +42,9 @@ func browserTestContext(t *testing.T) context.Context {
 	return ctx
 }
 
-func connectStagehand(t *testing.T, ctx context.Context) *stagehand.BrowserContext {
+func connectStagehand(ctx context.Context, t *testing.T) *stagehand.BrowserContext {
 	t.Helper()
-	gatewaySocket, guestSocket := devBrowserSockets(t, ctx)
+	gatewaySocket, guestSocket := devBrowserSockets(ctx, t)
 	browser, err := stagehand.ConnectLocalBrowser(ctx, stagehand.LocalBrowserConnectOptions{
 		CDPURL:          gatewaySocket,
 		ExtensionCDPURL: guestSocket,
@@ -69,13 +69,13 @@ func connectStagehand(t *testing.T, ctx context.Context) *stagehand.BrowserConte
 	return browserContext
 }
 
-func devBrowserSockets(t *testing.T, ctx context.Context) (gatewaySocket, guestSocket string) {
+func devBrowserSockets(ctx context.Context, t *testing.T) (gatewaySocket, guestSocket string) {
 	t.Helper()
 	gateway := devEndpoint(t, "BROWSER_GATEWAY_URL")
 	var version struct {
 		URL string `json:"webSocketDebuggerUrl"`
 	}
-	readDevJSON(t, ctx, gateway+"/json/version", &version)
+	readDevJSON(ctx, t, gateway+"/json/version", &version)
 	guestURL, err := url.Parse(version.URL)
 	guestCDP := os.Getenv("BROWSER_CDP_ADDRESS")
 	if err != nil || guestURL.Scheme != "ws" || !net.ParseIP(guestURL.Hostname()).IsLoopback() || guestURL.Host != guestCDP ||
@@ -85,7 +85,7 @@ func devBrowserSockets(t *testing.T, ctx context.Context) (gatewaySocket, guestS
 	return "ws" + strings.TrimPrefix(gateway, "http") + guestURL.EscapedPath(), guestURL.String()
 }
 
-func newTestPage(t *testing.T, ctx context.Context, browser *stagehand.BrowserContext) *stagehand.Page {
+func newTestPage(ctx context.Context, t *testing.T, browser *stagehand.BrowserContext) *stagehand.Page {
 	t.Helper()
 	page, err := browser.NewPage(ctx)
 	if err != nil {
@@ -121,7 +121,7 @@ func devEndpoint(t *testing.T, name string) string {
 	return raw
 }
 
-func readDevJSON(t *testing.T, ctx context.Context, endpoint string, result any) {
+func readDevJSON(ctx context.Context, t *testing.T, endpoint string, result any) {
 	t.Helper()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

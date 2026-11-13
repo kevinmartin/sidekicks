@@ -25,13 +25,13 @@ func TestStagehandWBA(t *testing.T) {
 		Signed      string `json:"signed"`
 		BlockedHost string `json:"blockedHost"`
 	}
-	readDevJSON(t, ctx, fixture+"/origins", &origins)
+	readDevJSON(ctx, t, fixture+"/origins", &origins)
 	signed, err := url.Parse(origins.Signed)
 	if err != nil || signed.Scheme != "https" || signed.Hostname() == "" || origins.BlockedHost == "" {
 		t.Fatalf("invalid dev fixture origins: %+v", origins)
 	}
 
-	browser := connectStagehand(t, ctx)
+	browser := connectStagehand(ctx, t)
 	previousPolicy, err := browser.GetDomainPolicy(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -50,8 +50,8 @@ func TestStagehandWBA(t *testing.T) {
 		})
 	})
 
-	page, conn := newWBAPage(t, ctx, browser)
-	waitForWBATab(t, ctx, fixture, page.PageID(), true)
+	page, conn := newWBAPage(ctx, t, browser)
+	waitForWBATab(ctx, t, fixture, page.PageID(), true)
 	if err := page.SetExtraHTTPHeaders(ctx, map[string]string{
 		"X-Sidekicks-Existing": "present",
 	}); err != nil {
@@ -78,7 +78,7 @@ func TestStagehandWBA(t *testing.T) {
 			t.Fatalf("expected navigation failure for %s, got %v", path, resp)
 		}
 	}
-	events := observations(t, ctx, fixture, run)
+	events := observations(ctx, t, fixture, run)
 	for _, unexpected := range []string{"origin /blocked", "origin /timeout"} {
 		if slices.Contains(events, unexpected) {
 			t.Errorf("rejected navigation reached the origin: %s", unexpected)
@@ -95,7 +95,7 @@ func TestStagehandWBA(t *testing.T) {
 	if _, err := page.Goto(ctx, "chrome://version/", nil); err != nil {
 		t.Fatalf("navigate WBA tab to a privileged browser page: %v", err)
 	}
-	waitForWBATab(t, ctx, fixture, page.PageID(), false)
+	waitForWBATab(ctx, t, fixture, page.PageID(), false)
 	if _, err := sendTargetCommand(ctx, conn, 3, "Target.getTargetInfo", map[string]string{
 		"targetId": page.PageID(),
 	}); err != nil {
@@ -103,12 +103,12 @@ func TestStagehandWBA(t *testing.T) {
 	}
 }
 
-func newWBAPage(t *testing.T, ctx context.Context, browser *stagehand.BrowserContext) (*stagehand.Page, *websocket.Conn) {
+func newWBAPage(ctx context.Context, t *testing.T, browser *stagehand.BrowserContext) (*stagehand.Page, *websocket.Conn) {
 	t.Helper()
 	// Stagehand creates its own extension page before navigating. Chromium
 	// can retain that origin on about:blank and refuse Sidekicks' debugger.
 	// Create a neutral blank target the way a session launcher would.
-	socket, _ := devBrowserSockets(t, ctx)
+	socket, _ := devBrowserSockets(ctx, t)
 	conn, _, err := websocket.Dial(ctx, socket, &websocket.DialOptions{
 		HTTPHeader: http.Header{
 			"Authorization": {"Bearer " + os.Getenv("BROWSER_GATEWAY_TOKEN")},
@@ -183,14 +183,14 @@ func sendTargetCommand(ctx context.Context, conn *websocket.Conn, id int, method
 	}
 }
 
-func observations(t *testing.T, ctx context.Context, fixture, key string) []string {
+func observations(ctx context.Context, t *testing.T, fixture, key string) []string {
 	t.Helper()
 	var events []string
-	readDevJSON(t, ctx, fixture+"/observations?key="+url.QueryEscape(key), &events)
+	readDevJSON(ctx, t, fixture+"/observations?key="+url.QueryEscape(key), &events)
 	return events
 }
 
-func waitForWBATab(t *testing.T, ctx context.Context, fixture, targetID string, wantReady bool) {
+func waitForWBATab(ctx context.Context, t *testing.T, fixture, targetID string, wantReady bool) {
 	t.Helper()
 	deadline := time.NewTimer(10 * time.Second)
 	defer deadline.Stop()
@@ -201,7 +201,7 @@ func waitForWBATab(t *testing.T, ctx context.Context, fixture, targetID string, 
 			Ready   *bool `json:"ready"`
 			Retired bool  `json:"retired"`
 		}
-		readDevJSON(t, ctx, fixture+"/readiness?targetId="+url.QueryEscape(targetID), &status)
+		readDevJSON(ctx, t, fixture+"/readiness?targetId="+url.QueryEscape(targetID), &status)
 		if status.Ready == nil {
 			t.Fatal("fixture did not report a readiness value")
 		}

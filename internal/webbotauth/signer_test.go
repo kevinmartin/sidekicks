@@ -3,6 +3,9 @@ package webbotauth
 import (
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRequestPathAndQuery(t *testing.T) {
@@ -13,18 +16,12 @@ func TestRequestPathAndQuery(t *testing.T) {
 	} {
 		t.Run(tc.url, func(t *testing.T) {
 			req, err := http.NewRequest(http.MethodGet, tc.url, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			msg := &SignerMessage{derivedComponents: make(map[string]signerMessageComponent)}
 			WithPath(false)(msg, req)
 			WithQuery(false)(msg, req)
-			if got := msg.derivedComponents["@path"].value; got != tc.path {
-				t.Errorf("path = %q, want %q", got, tc.path)
-			}
-			if got := msg.derivedComponents["@query"].value; got != tc.query {
-				t.Errorf("query = %q, want %q", got, tc.query)
-			}
+			assert.Equal(t, tc.path, msg.derivedComponents["@path"].value, "@path")
+			assert.Equal(t, tc.query, msg.derivedComponents["@query"].value, "@query")
 		})
 	}
 }
