@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/kevinmartin/sidekicks/internal/browsergateway"
+	"github.com/kevinmartin/sidekicks/internal/services/browsergateway"
 )
 
 type config struct {

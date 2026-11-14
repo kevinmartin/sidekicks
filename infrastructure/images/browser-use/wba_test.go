@@ -117,7 +117,9 @@ func newWBAPage(ctx context.Context, t *testing.T, browser *stagehand.BrowserCon
 	if err != nil {
 		t.Fatalf("connect to browser gateway: %v", err)
 	}
-	t.Cleanup(func() { _ = conn.CloseNow() })
+	t.Cleanup(func() {
+		_ = conn.CloseNow()
+	})
 	targetID, err := sendTargetCommand(ctx, conn, 1, "Target.createTarget", map[string]string{
 		"url": "about:blank",
 	})

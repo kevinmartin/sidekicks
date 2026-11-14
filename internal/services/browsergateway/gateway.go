@@ -17,6 +17,7 @@ import (
 
 var browserSocketID = regexp.MustCompile(`^[a-f0-9-]+$`)
 
+// Gateway serves authenticated discovery and WebSocket requests for Chromium.
 type Gateway struct {
 	expectedAuthorization []byte
 	discoveryURL          string
@@ -40,8 +41,11 @@ func New(token, cdpAddress string) (*Gateway, error) {
 		Scheme: "http",
 		Host:   cdpAddress,
 	}
+	dialer := &net.Dialer{
+		Timeout: 2 * time.Second,
+	}
 	transport := &http.Transport{
-		DialContext:           (&net.Dialer{Timeout: 2 * time.Second}).DialContext,
+		DialContext:           dialer.DialContext,
 		ResponseHeaderTimeout: 3 * time.Second,
 		IdleConnTimeout:       30 * time.Second,
 	}
@@ -67,21 +71,27 @@ func New(token, cdpAddress string) (*Gateway, error) {
 	}, nil
 }
 
+// Health reports whether Chromium's discovery endpoint is ready.
 func (g *Gateway) Health(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, g.discoveryURL, nil)
-	if err == nil {
-		resp, err := g.client.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-		}
+	if err != nil {
+		http.Error(w, "Chromium CDP is unavailable", http.StatusServiceUnavailable)
+		return
 	}
-	http.Error(w, "Chromium CDP is unavailable", http.StatusServiceUnavailable)
+	resp, err := g.client.Do(req)
+	if err != nil {
+		http.Error(w, "Chromium CDP is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Chromium CDP is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
+// Authenticate requires the configured bearer token before calling next.
 func (g *Gateway) Authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), g.expectedAuthorization) != 1 {
@@ -97,6 +107,7 @@ func (g *Gateway) Discovery(w http.ResponseWriter, r *http.Request) {
 	g.forward(w, r)
 }
 
+// WebSocket forwards browser WebSocket upgrades to Chromium.
 func (g *Gateway) WebSocket(w http.ResponseWriter, r *http.Request) {
 	if !browserSocketID.MatchString(r.PathValue("id")) || !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		http.NotFound(w, r)

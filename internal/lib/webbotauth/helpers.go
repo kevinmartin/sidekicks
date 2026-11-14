@@ -11,11 +11,13 @@ import (
 	"os"
 )
 
+// Ed25519KeyPair holds the public and private keys used for signing.
 type Ed25519KeyPair struct {
 	PublicKey  ed25519.PublicKey
 	PrivateKey ed25519.PrivateKey
 }
 
+// GenerateEd25519KeyPair creates a new Ed25519 key pair.
 func GenerateEd25519KeyPair() (Ed25519KeyPair, error) {
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -28,6 +30,7 @@ func GenerateEd25519KeyPair() (Ed25519KeyPair, error) {
 	}, nil
 }
 
+// ComputeJWKThumbprint returns the base64url-encoded RFC 7638 thumbprint of pubKey.
 func ComputeJWKThumbprint(pubKey ed25519.PublicKey) (string, error) {
 	// Keep these fields in lexicographic JSON name order for RFC 7638.
 	canonicalJWK := struct {
@@ -49,6 +52,7 @@ func ComputeJWKThumbprint(pubKey ed25519.PublicKey) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(hash[:]), nil
 }
 
+// LoadPublicKeyFromFile reads a PEM-encoded Ed25519 public key.
 func LoadPublicKeyFromFile(path string) (ed25519.PublicKey, error) {
 	pemBytes, err := os.ReadFile(path)
 	if err != nil {
@@ -76,6 +80,7 @@ func LoadPublicKeyFromFile(path string) (ed25519.PublicKey, error) {
 	return pubKey, nil
 }
 
+// LoadPrivateKeyFromFile reads a PEM-encoded Ed25519 private key.
 func LoadPrivateKeyFromFile(path string) (ed25519.PrivateKey, error) {
 	pemBytes, err := os.ReadFile(path)
 	if err != nil {

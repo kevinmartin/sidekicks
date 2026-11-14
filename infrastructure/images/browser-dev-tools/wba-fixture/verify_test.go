@@ -7,7 +7,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/kevinmartin/sidekicks/internal/webbotauth"
+	"github.com/kevinmartin/sidekicks/internal/lib/webbotauth"
 	"github.com/stretchr/testify/require"
 )
 
