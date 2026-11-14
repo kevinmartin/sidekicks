@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS extension-build
+FROM --platform=$BUILDPLATFORM node:25-bookworm-slim AS extension-build
 WORKDIR /build
 COPY --from=sidekicks_src /extensions/sidekicks/package.json /extensions/sidekicks/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
