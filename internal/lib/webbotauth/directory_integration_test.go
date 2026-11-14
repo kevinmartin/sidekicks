@@ -108,7 +108,7 @@ func startDirectoryTunnel(ctx context.Context, t *testing.T, address string) str
 		"-oExitOnForwardFailure=yes",
 		"-oStrictHostKeyChecking=no",
 		"-R",
-		"80:" + address,
+		"80:"+address,
 		"nokey@localhost.run",
 	)
 	stdout, err := cmd.StdoutPipe()
