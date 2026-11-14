@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -12,6 +14,11 @@ import (
 )
 
 func TestBrokerReportsDecodeFailures(t *testing.T) {
+	type brokerResult struct {
+		err      error
+		panicErr error
+	}
+
 	for _, tc := range []struct {
 		name    string
 		request string
@@ -46,28 +53,35 @@ func TestBrokerReportsDecodeFailures(t *testing.T) {
 				t.Cleanup(func() {
 					_ = client.Close()
 				})
+				require.NoError(t, client.SetWriteDeadline(time.Now().Add(time.Second)))
 				ctx := t.Context()
-				result := make(chan error, 1)
+				result := make(chan brokerResult, 1)
 				go func() {
-					result <- f.serveBroker(ctx, server)
+					var outcome brokerResult
+					defer func() {
+						if panicValue := recover(); panicValue != nil {
+							outcome.panicErr = fmt.Errorf("broker panic: %v\n%s", panicValue, debug.Stack())
+						}
+						result <- outcome
+					}()
+					outcome.err = f.serveBroker(ctx, server)
 				}()
 
-				// Let the broker set its deadline and start reading before closing the pipe.
+				// Let the broker start reading before sending or closing the pipe.
 				synctest.Wait()
-				require.NoError(t, client.SetWriteDeadline(time.Now().Add(time.Second)))
+				var writeErr error
 				if tc.request != "" {
-					_, err := io.WriteString(client, tc.request)
-					if tc.wantErr == "" {
-						require.NoError(t, err)
-					}
+					_, writeErr = io.WriteString(client, tc.request)
 				}
 				_ = client.Close()
-				err := <-result
+				outcome := <-result
+				require.NoError(t, outcome.panicErr)
 				if tc.wantErr != "" {
-					require.ErrorContains(t, err, tc.wantErr)
+					require.ErrorContains(t, outcome.err, tc.wantErr)
 					return
 				}
-				require.NoError(t, err)
+				require.NoError(t, writeErr)
+				require.NoError(t, outcome.err)
 			})
 		})
 	}
