@@ -45,8 +45,8 @@ jobs:
             printf 'Run gofmt on these files\n%s\n' "$unformatted"
             exit 1
           fi
-      - name: Vet Go packages
-        run: go vet ./...
+      - name: Vet Go packages and integration tests
+        run: go vet -tags=integration ./...
       - name: Run Go unit tests
         run: make test
       - name: Build Go packages

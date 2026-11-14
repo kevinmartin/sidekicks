@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/kevinmartin/sidekicks/internal/webbotauth"
+	"github.com/kevinmartin/sidekicks/internal/lib/webbotauth"
 )
 
 func TestComputeJWKThumbprint(t *testing.T) {

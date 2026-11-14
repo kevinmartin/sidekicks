@@ -12,12 +12,14 @@ import (
 	"time"
 )
 
+// DirectoryResponse is the JSON document served by a signed key directory.
 type DirectoryResponse struct {
 	Keys           []DirectoryKey `json:"keys"`
 	SignatureAgent string         `json:"signature_agent"`
 	Purpose        string         `json:"purpose"`
 }
 
+// DirectoryKey describes a signing key and its validity window.
 type DirectoryKey struct {
 	Kty string `json:"kty"`
 	Crv string `json:"crv"`
@@ -28,6 +30,7 @@ type DirectoryKey struct {
 	Exp int64  `json:"exp"`
 }
 
+// SignedDirectoryHandler serves a key directory signed by each supplied key pair.
 func SignedDirectoryHandler(sigAgent, purpose string, keyPairs []Ed25519KeyPair) (http.HandlerFunc, error) {
 	var signatures, sigInputs []string
 
@@ -54,7 +57,8 @@ func SignedDirectoryHandler(sigAgent, purpose string, keyPairs []Ed25519KeyPair)
 	}
 
 	// Preserve the JSON encoding used for the signed content digest.
-	jsonResp, err := json.Marshal(resp,
+	jsonResp, err := json.Marshal(
+		resp,
 		jsontext.EscapeForHTML(true),
 		jsontext.EscapeForJS(true),
 		jsontext.AllowInvalidUTF8(true),

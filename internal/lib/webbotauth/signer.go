@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// Signer creates HTTP message signatures with an Ed25519 key pair.
 type Signer struct {
 	pubKey  ed25519.PublicKey
 	privKey ed25519.PrivateKey
@@ -18,6 +19,7 @@ type Signer struct {
 	expiry  time.Duration
 }
 
+// NewSigner creates a signer whose key ID is the public key's JWK thumbprint.
 func NewSigner(pubKey ed25519.PublicKey, privKey ed25519.PrivateKey) (*Signer, error) {
 	kid, err := ComputeJWKThumbprint(pubKey)
 	if err != nil {
@@ -28,7 +30,7 @@ func NewSigner(pubKey ed25519.PublicKey, privKey ed25519.PrivateKey) (*Signer, e
 		pubKey:  pubKey,
 		privKey: privKey,
 		kid:     kid,
-		expiry:  time.Second * 30, // default expiry of 30 seconds
+		expiry:  30 * time.Second,
 	}, nil
 }
 
@@ -37,6 +39,7 @@ type signerMessageComponent struct {
 	request bool
 }
 
+// SignerMessage holds the components and parameters for a signature.
 type SignerMessage struct {
 	label             string
 	httpFields        map[string]signerMessageComponent
@@ -44,8 +47,10 @@ type SignerMessage struct {
 	parameters        map[string]string
 }
 
+// SignerMessageOption configures a signature from an HTTP request.
 type SignerMessageOption func(sm *SignerMessage, req *http.Request)
 
+// WithHeader covers the named header from the supplied request.
 func WithHeader(key string, request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		lowerKey := strings.ToLower(key)
@@ -56,6 +61,7 @@ func WithHeader(key string, request bool) SignerMessageOption {
 	}
 }
 
+// WithAuthority covers the request authority.
 func WithAuthority(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@authority"] = signerMessageComponent{
@@ -65,6 +71,7 @@ func WithAuthority(request bool) SignerMessageOption {
 	}
 }
 
+// WithTargetURI covers the request target URI.
 func WithTargetURI(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@target-uri"] = signerMessageComponent{
@@ -74,6 +81,7 @@ func WithTargetURI(request bool) SignerMessageOption {
 	}
 }
 
+// WithMethod covers the HTTP method.
 func WithMethod(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@method"] = signerMessageComponent{
@@ -83,6 +91,7 @@ func WithMethod(request bool) SignerMessageOption {
 	}
 }
 
+// WithPath covers the escaped request path, using "/" for an empty path.
 func WithPath(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		path := req.URL.EscapedPath()
@@ -96,6 +105,7 @@ func WithPath(request bool) SignerMessageOption {
 	}
 }
 
+// WithScheme covers the request URL scheme.
 func WithScheme(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@scheme"] = signerMessageComponent{
@@ -105,6 +115,7 @@ func WithScheme(request bool) SignerMessageOption {
 	}
 }
 
+// WithQuery covers the raw query string, including its leading question mark.
 func WithQuery(request bool) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.derivedComponents["@query"] = signerMessageComponent{
@@ -114,6 +125,7 @@ func WithQuery(request bool) SignerMessageOption {
 	}
 }
 
+// WithNonce adds a base64url nonce generated from byteLength random bytes.
 func WithNonce(byteLength int) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		b := make([]byte, byteLength)
@@ -125,24 +137,30 @@ func WithNonce(byteLength int) SignerMessageOption {
 	}
 }
 
+// WithTag sets the signature's application tag.
 func WithTag(tag string) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.parameters["tag"] = tag
 	}
 }
 
+// WithSignatureLabel sets the label used in the signature headers.
 func WithSignatureLabel(label string) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
 		sm.label = label
 	}
 }
 
+// WithSignatureAgent sets and covers the Signature-Agent header.
 func WithSignatureAgent(signatureAgent string) SignerMessageOption {
 	return func(sm *SignerMessage, req *http.Request) {
-		sm.derivedComponents["signature-agent"] = signerMessageComponent{value: fmt.Sprintf(`"%s"`, signatureAgent)}
+		sm.derivedComponents["signature-agent"] = signerMessageComponent{
+			value: fmt.Sprintf(`"%s"`, signatureAgent),
+		}
 	}
 }
 
+// Sign returns the signature headers for req using the selected components.
 func (s *Signer) Sign(req *http.Request, sms ...SignerMessageOption) (http.Header, error) {
 	sm := &SignerMessage{
 		label:             "sig1",

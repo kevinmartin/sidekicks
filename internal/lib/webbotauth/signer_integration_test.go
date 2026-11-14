@@ -4,11 +4,13 @@
 package webbotauth_test
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/kevinmartin/sidekicks/internal/webbotauth"
+	"github.com/kevinmartin/sidekicks/internal/lib/webbotauth"
 )
 
 const validCrawlTestError = "unknown public key or unknown verified bot ID for keyid"
@@ -19,15 +21,21 @@ func TestSignerWithCrawlTest(t *testing.T) {
 		t.Fatalf("Failed to generate Ed25519 key pair: %v", err)
 	}
 
-	tunnelURL, cleanup := newTestDirectoryServer(t, []webbotauth.Ed25519KeyPair{kp})
-	defer cleanup()
+	tunnelURL := newTestDirectoryServer(t.Context(), t, []webbotauth.Ed25519KeyPair{kp})
 
 	signer, err := webbotauth.NewSigner(kp.PublicKey, kp.PrivateKey)
 	if err != nil {
 		t.Fatalf("Failed to create signer: %v", err)
 	}
 
-	req, err := http.NewRequest("GET", "https://crawltest.com/cdn-cgi/web-bot-auth", nil)
+	ctx, cancel := context.WithTimeout(t.Context(), verifierTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		"https://crawltest.com/cdn-cgi/web-bot-auth",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -55,16 +63,19 @@ func TestSignerWithCrawlTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes := make([]byte, 1024)
-		n, _ := resp.Body.Read(bodyBytes)
-
-		if resp.StatusCode != http.StatusUnauthorized || strings.TrimSpace(string(bodyBytes[:n])) != validCrawlTestError {
-			//time.Sleep(5 * time.Minute) // Wait for 5 minutes to allow for any potential propagation or processing delays
-			t.Logf("Status code: %v, signed-headers: %v, body: %v", resp.StatusCode, headers, string(bodyBytes[:n]))
-			t.Fatalf("Unexpected response status: %v", resp.StatusCode)
-		}
+	if resp.StatusCode == http.StatusOK {
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if err != nil {
+		t.Fatalf("read CrawlTest response: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized || strings.TrimSpace(string(body)) != validCrawlTestError {
+		t.Fatalf("unexpected CrawlTest status %d: %s", resp.StatusCode, body)
 	}
 }
 
@@ -74,15 +85,21 @@ func TestSignerWithFingerprint(t *testing.T) {
 		t.Fatalf("Failed to generate Ed25519 key pair: %v", err)
 	}
 
-	tunnelURL, cleanup := newTestDirectoryServer(t, []webbotauth.Ed25519KeyPair{kp})
-	defer cleanup()
+	tunnelURL := newTestDirectoryServer(t.Context(), t, []webbotauth.Ed25519KeyPair{kp})
 
 	signer, err := webbotauth.NewSigner(kp.PublicKey, kp.PrivateKey)
 	if err != nil {
 		t.Fatalf("Failed to create signer: %v", err)
 	}
 
-	req, err := http.NewRequest("GET", "https://api.fingerprint-webbotauth.com/api/verify", nil)
+	ctx, cancel := context.WithTimeout(t.Context(), verifierTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		"https://api.fingerprint-webbotauth.com/api/verify",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -91,7 +108,6 @@ func TestSignerWithFingerprint(t *testing.T) {
 
 	headers, err := signer.Sign(
 		req,
-		//webbotauth.WithHeader("Accept", false),
 		webbotauth.WithAuthority(false),
 		webbotauth.WithMethod(false),
 		webbotauth.WithNonce(16),
@@ -110,7 +126,9 @@ func TestSignerWithFingerprint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	fingerprintResp, err := decodeFingerprintResponse(resp.Body)
 	if err != nil {

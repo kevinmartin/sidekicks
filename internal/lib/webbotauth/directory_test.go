@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kevinmartin/sidekicks/internal/webbotauth"
+	"github.com/kevinmartin/sidekicks/internal/lib/webbotauth"
 )
 
 func TestSignedDirectoryHandlerJSON(t *testing.T) {
