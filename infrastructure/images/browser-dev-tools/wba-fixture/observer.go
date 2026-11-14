@@ -64,6 +64,7 @@ func (f *fixture) observer() http.Handler {
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), expected) != 1 {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="sidekicks-fixture"`)
 			http.Error(w, "fixture authorization required", http.StatusUnauthorized)
 			return
 		}

@@ -30,9 +30,9 @@ Keep a business type with its rules, HTTP request and response types with the ha
 
 ### Signing policy
 
-- `internal/domain/signingpolicy` owns the policy type, validation, and deterministic request matching. It can evaluate a policy from request data without a broker, a signing key, or network access.
-- `internal/services/signingbroker` applies the policy supplied for the session. It calls the signer for requests that match.
-- `internal/lib/webbotauth` owns protocol mechanics such as signature generation, key thumbprints, and signed directory responses. [Web Bot Auth](internal/lib/webbotauth/README.md)
+The dev fixture currently selects which requests to sign. It uses `internal/lib/webbotauth` for signature generation. The library also owns key thumbprints and signed directory responses. [Fixture broker](infrastructure/images/browser-dev-tools/wba-fixture/broker.go) · [Web Bot Auth](internal/lib/webbotauth/README.md)
+
+When implementing dynamic signing policies, put the policy type, validation, and deterministic request matching in `internal/domain/signingpolicy`. The evaluator uses only policy and request data. The planned `internal/services/signingbroker` package will apply the session policy and call the signer for matching requests.
 
 ## Local development and CI
 

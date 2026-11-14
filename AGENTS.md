@@ -4,7 +4,7 @@
 
 - Keep each service's behavior, handlers, and data access together under `internal/services/<service>/`. Put shared Sidekicks business rules in `internal/domain/` and reusable protocol and infrastructure code in `internal/lib/`. See the [repository layout](CONTRIBUTING.md#repository-layout).
 - Keep `cmd/<binary>/main.go` focused on configuration, dependency wiring, and process lifecycle. Register command-specific routes and middleware in `cmd/<binary>/`.
-- Put the signing policy type, validation, and matching in `internal/domain/signingpolicy`. The signing broker applies the policy for its session and uses the Web Bot Auth library to generate signatures.
+- When implementing dynamic signing policies, put the policy type, validation, and matching in `internal/domain/signingpolicy`. Put the service that applies the session policy and calls the Web Bot Auth signer in `internal/services/signingbroker`.
 
 ## Go style
 

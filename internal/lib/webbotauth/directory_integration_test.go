@@ -16,11 +16,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kevinmartin/sidekicks/internal/lib/webbotauth"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -91,6 +93,11 @@ func newTestDirectoryServer(ctx context.Context, t *testing.T, keyPairs []webbot
 		}
 	})
 	go func() {
+		defer func() {
+			if panicValue := recover(); panicValue != nil {
+				serveDone <- fmt.Errorf("directory server panic: %v\n%s", panicValue, debug.Stack())
+			}
+		}()
 		serveDone <- server.Serve(listener)
 	}()
 	return tunnelURL
@@ -125,23 +132,39 @@ func startDirectoryTunnel(ctx context.Context, t *testing.T, address string) str
 		err error
 	}
 	startup := make(chan startupResult, 1)
-	readDone := make(chan struct{})
+	readDone := make(chan error, 1)
 	t.Cleanup(func() {
 		cancel()
 		_ = stdout.Close()
-		<-readDone
+		if err := <-readDone; err != nil {
+			t.Error(err)
+		}
 		if err := cmd.Wait(); err != nil {
 			t.Logf("SSH tunnel stopped: %v", err)
 		}
 	})
 	go func() {
-		defer close(readDone)
+		var started bool
+		defer func() {
+			var readErr error
+			if panicValue := recover(); panicValue != nil {
+				readErr = fmt.Errorf("SSH output reader panic: %v\n%s", panicValue, debug.Stack())
+				if !started {
+					startup <- startupResult{
+						err: readErr,
+					}
+					readErr = nil
+				}
+			}
+			readDone <- readErr
+		}()
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			if url := tunnelURLPattern.FindString(scanner.Text()); url != "" {
 				startup <- startupResult{
 					url: url,
 				}
+				started = true
 				// Keep draining the pipe until the SSH process exits.
 				_, _ = io.Copy(io.Discard, stdout)
 				return
@@ -195,19 +218,13 @@ type directoryValidationResponse struct {
 
 func TestSignerWithDirectoryCLI(t *testing.T) {
 	kp1, err := webbotauth.GenerateEd25519KeyPair()
-	if err != nil {
-		t.Fatalf("Failed to generate Ed25519 key pair: %v", err)
-	}
+	require.NoError(t, err, "generate first Ed25519 key pair")
 
 	kp2, err := webbotauth.GenerateEd25519KeyPair()
-	if err != nil {
-		t.Fatalf("Failed to generate Ed25519 key pair: %v", err)
-	}
+	require.NoError(t, err, "generate second Ed25519 key pair")
 
 	binaryPath, err := lookupDirectoryCLI()
-	if err != nil {
-		t.Fatalf("Failed to locate http-signature-directory binary: %v", err)
-	}
+	require.NoError(t, err, "locate http-signature-directory binary")
 
 	table := []struct {
 		name     string
@@ -224,6 +241,13 @@ func TestSignerWithDirectoryCLI(t *testing.T) {
 	}
 	for _, tt := range table {
 		t.Run(tt.name, func(t *testing.T) {
+			wantThumbprints := make([]string, 0, len(tt.keyPairs))
+			for _, keyPair := range tt.keyPairs {
+				thumbprint, err := webbotauth.ComputeJWKThumbprint(keyPair.PublicKey)
+				require.NoError(t, err, "compute expected key thumbprint")
+				wantThumbprints = append(wantThumbprints, thumbprint)
+			}
+
 			tunnelURL := newTestDirectoryServer(t.Context(), t, tt.keyPairs)
 			ctx, cancel := context.WithTimeout(t.Context(), verifierTimeout)
 			defer cancel()
@@ -242,12 +266,21 @@ func TestSignerWithDirectoryCLI(t *testing.T) {
 
 			var validationResp directoryValidationResponse
 			if err := json.Unmarshal(output, &validationResp); err != nil {
-				t.Fatalf("Failed to unmarshal command output: %v, output: %s", err, string(output))
+				t.Fatalf("decode directory verifier output: %v\n%s", err, output)
 			}
 
 			if !validationResp.Success {
-				t.Fatalf("Directory validation failed: %s, details: %+v", validationResp.Message, validationResp.Details)
+				t.Fatalf("directory validation failed: %s, details: %+v", validationResp.Message, validationResp.Details)
 			}
+			details := validationResp.Details
+			require.Equal(t, len(wantThumbprints), details.KeysCount, "published key count")
+			gotThumbprints := make([]string, 0, len(details.ValidatedKeys))
+			for _, key := range details.ValidatedKeys {
+				require.True(t, key.Valid, "directory key %q is invalid", key.Thumbprint)
+				require.True(t, key.SignatureVerified, "signature for directory key %q was unverified", key.Thumbprint)
+				gotThumbprints = append(gotThumbprints, key.Thumbprint)
+			}
+			require.ElementsMatch(t, wantThumbprints, gotThumbprints, "validated key thumbprints")
 		})
 	}
 }

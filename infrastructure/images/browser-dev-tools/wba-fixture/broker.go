@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -44,7 +45,13 @@ func (f *fixture) serveBroker(ctx context.Context, conn net.Conn) error {
 		TargetID string `json:"targetId"`
 		SentAtMS int64  `json:"sentAtMs"`
 	}
-	if err := json.NewDecoder(io.LimitReader(conn, 32<<10)).Decode(&message); err != nil || message.ID == "" {
+	if err := json.NewDecoder(io.LimitReader(conn, 32<<10)).Decode(&message); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return fmt.Errorf("decode broker request: %w", err)
+	}
+	if message.ID == "" {
 		return nil
 	}
 	response := map[string]any{
