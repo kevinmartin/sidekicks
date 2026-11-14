@@ -8,7 +8,7 @@ COPY --from=sidekicks_src /extensions/sidekicks/manifest.json /extensions/sideki
 COPY --from=sidekicks_src /extensions/sidekicks/src/ ./src/
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.27.3-bookworm AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm AS go-build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
