@@ -6,6 +6,43 @@ Stagehand extension embedded in the pinned Go SDK, the compiled Sidekicks
 extension, and the Go native messaging helper. The Dockerfile builds these
 artifacts in separate stages.
 
+## Run a local browser
+
+On Apple silicon with macOS 26 or later, install Apple's `container` CLI
+and start its services with `container system start`. Build the browser image
+into that runtime's image store with `make browser-image-apple`. For Docker on
+macOS or Linux, start Docker and run `make browser-image-docker`.
+
+```sh
+make sidekicks
+build/sidekicks browser start --name web
+build/sidekicks browser cmd --name web goto https://example.com
+build/sidekicks browser cmd --name web snapshot
+build/sidekicks browser screenshot --name web -o page.png
+build/sidekicks browser stop --name web
+build/sidekicks browser delete --name web
+```
+
+macOS defaults to `apple`. Linux uses `docker`. Run `build/sidekicks config
+set runtime docker` to set the default on macOS, or pass `--runtime docker`
+for a single command. The Docker backend uses the active local Unix-socket
+context. `config show` reports the effective setting and its source. Set
+`SIDEKICKS_BROWSER_IMAGE` when using a different local image tag.
+`list` shows running and stopped browsers in the selected runtime.
+
+`browser tabs` lists live tab IDs. Browser commands and screenshots default
+to the primary tab and accept `--tab <id>` to target another tab. `browser cmd
+click` takes a selector. `browser cmd type` takes a selector and the replacement
+text. Both accept CSS selectors and XPath selectors with an `xpath=` prefix.
+`browser cdp` takes a method and an optional JSON object as a second argument.
+Methods in the `Browser`, `Target`, and `SystemInfo` domains default to browser
+scope. Pass `--browser` to select browser scope explicitly.
+
+Run `make cli-integration` for the selected runtime. Run
+`SIDEKICKS_TEST_BOTH=1 make cli-integration` on macOS after building the image
+into both runtimes to exercise both lifecycles and verify that their instance
+names are independent. [CLI design](../../../docs/sidekicks-cli.md)
+
 ## Local Kubernetes development
 
 Enable Kubernetes in Docker Desktop and run from the repository root.
@@ -56,10 +93,23 @@ This deletes the `sidekicks-dev` namespace from the Docker Desktop context.
 
 ## Browser control and signing
 
-The gateway sidecar exposes authenticated Chromium discovery and browser
-WebSocket connections. Chromium's raw CDP listener stays on pod loopback.
-The host SDK connects through the gateway, and the Stagehand worker connects
-directly to guest loopback.
+`sidekicks-guest` launches Chromium and serves the authenticated browser API,
+including discovery and browser WebSocket connections. Chromium's raw CDP
+listener stays on guest loopback. The embedded Stagehand worker uses that
+listener directly. The guest acquires its Stagehand session on the first typed
+browser command.
+
+```mermaid
+flowchart LR
+    CLI[sidekicks CLI] -->|start, stop, delete, list| Runtime[Apple container or Docker]
+    Runtime -->|launch| Guest[sidekicks-guest]
+    CLI -->|authenticated browser commands| Guest
+    Guest -->|launch and guest loopback CDP| Chromium
+```
+
+Apple publishes a Unix socket inside a private host directory. Docker publishes
+the guest port on host loopback. The Kubernetes dev stack port-forwards the
+guest port from the browser container.
 
 The Sidekicks extension starts the Go native messaging helper through
 `com.sidekicks.wba.json`. The helper sends a JSON message to
@@ -117,12 +167,11 @@ notification. The fixture retains that retirement for twelve seconds and
 rejects readiness messages older than twelve seconds. Use a fresh blank tab
 for signed navigation after a detach.
 
-The browser runs with a read-only root filesystem and dropped capabilities.
-The local Kubernetes manifest uses an unconfined outer seccomp profile for
-Chromium so its own user-namespace sandbox can start. Validate the deployment
-profile on the target Kata runtime. The production supervisor, browser
-gateway, Signing Broker, and signing credentials belong outside the browser
-workload. The production extension should be force-installed under a stable ID.
+The Kubernetes dev browser runs with a read-only root filesystem and dropped
+capabilities. Its outer seccomp profile allows Chromium to start its own
+user-namespace sandbox. Validate the deployment profile on the target Kata
+runtime. Keep the production signing broker and signing credentials outside
+the browser workload. Force-install the production extension under a stable ID.
 
 ## Base image and maintenance
 

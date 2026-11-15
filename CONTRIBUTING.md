@@ -11,7 +11,7 @@ Use this layout when adding packages or moving code into its owning package.
 | `cmd/<binary>/` | Product entry points, startup and shutdown, config loading, dependency wiring, and command-specific route registration. |
 | `internal/services/<service>/` | Service behavior, transport handlers and their request and response types, and service-owned data access. |
 | `internal/domain/<capability>/` | Sidekicks business rules with a lifecycle independent of a service or transport, and the types those rules operate on. |
-| `internal/clients/<provider>/` | Reusable clients for external APIs such as GitHub and Slack. Services own the decisions about when to call them. |
+| `internal/clients/<provider>/` | Reusable clients for APIs such as the Sidekicks browser guest, GitHub, and Slack. Services own the decisions about when to call them. |
 | `internal/harness/` | The future Sidekicks agent harness, including execution and tool orchestration. |
 | `internal/lib/<library>/` | Reusable protocol and infrastructure packages, such as Web Bot Auth and shared database connection setup. |
 | `extensions/sidekicks/` | The Sidekicks Chrome extension. Web Bot Auth is one feature module. |
@@ -22,7 +22,7 @@ Update imports, Dockerfile source paths, and any path-specific test commands tog
 
 ## Service boundaries
 
-The browser gateway's command registers method and path patterns and attaches middleware. The service package implements the handlers. Use `http.ServeMux` when its patterns cover the routing needs. For a larger API with its own router, assemble it in the service's transport package and mount it from the command. [Gateway entry point](cmd/browser-gateway/main.go) · [Gateway handlers](internal/services/browsergateway/gateway.go)
+`sidekicks-guest` registers method and path patterns and attaches middleware. The browser gateway service implements the handlers. Use `http.ServeMux` when its patterns cover the routing needs. For a larger API with its own router, assemble it in the service's transport package and mount it from the command. [Guest entry point](cmd/sidekicks-guest/main.go) · [Gateway handlers](internal/services/browsergateway/handlers.go)
 
 Start with files within the owning service package. Separate handlers from service decisions so those decisions can be tested directly. Split out a package such as `httpapi` or `postgres` when that gives the adapter a clear interface or isolates its dependencies. The service defines the store interface when it needs one, and the command wires the implementation. [Go interface guidance](https://go.dev/wiki/CodeReviewComments#interfaces)
 
@@ -37,6 +37,7 @@ When implementing dynamic signing policies, put the policy type, validation, and
 ## Local development and CI
 
 - Use `make test` for Go unit tests. Keep tests beside the code they exercise.
+- Use `make cli-integration` to test browser lifecycle and commands against a local runtime with the browser image loaded. [Local browser setup](infrastructure/images/browser-use/README.md#run-a-local-browser)
 - Use `make dev` to build the images, deploy the Docker Desktop Kubernetes stack, and forward local ports. Run `make integration` from a second terminal. Browser tests connect to the running deployment. The repo-wide `integration` suite also runs the live Web Bot Auth checks with the prerequisites documented in the browser image README. [Makefile](Makefile) · [Browser development setup](infrastructure/images/browser-use/README.md#local-kubernetes-development)
 - Keep build, deploy, and port-forward steps independently callable in Make. Place each `.PHONY` declaration immediately above its target with the colons aligned, and use file targets for generated files with tracked inputs.
 - PRs and pushes to `main` share checks for Go, the extension, Kubernetes manifests, and container images. CI builds the images and deploys them to a temporary kind cluster before running the browser integration tests. [Reusable checks](.github/workflows/checks.reusable.yml)

@@ -35,7 +35,7 @@ replacements:
           kind: Deployment
           name: browser-use
         fieldPaths:
-          - spec.template.spec.containers.[name=gateway].ports.[name=gateway].containerPort
+          - spec.template.spec.containers.[name=browser].ports.[name=gateway].containerPort
   - source:
       kind: ConfigMap
       name: sidekicks-browser-settings
