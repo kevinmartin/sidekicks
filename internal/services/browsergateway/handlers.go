@@ -65,7 +65,7 @@ func (b *Browser) Screenshot(w http.ResponseWriter, r *http.Request) {
 	}
 	png, err := base64.StdEncoding.DecodeString(image.Data)
 	if err != nil || len(png) == 0 {
-		writeResult(w, nil, errors.New("Chromium returned an invalid screenshot"))
+		writeResult(w, nil, errors.New("invalid screenshot returned by Chromium"))
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")

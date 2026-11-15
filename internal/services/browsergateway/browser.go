@@ -48,7 +48,7 @@ func (g *Gateway) OpenBrowser(ctx context.Context) (*Browser, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer connection.socket.CloseNow()
+	defer connection.close()
 	var target struct {
 		ID string `json:"targetId"`
 	}
@@ -108,7 +108,7 @@ func (b *Browser) tabs(ctx context.Context) (browserapi.Tabs, error) {
 	if err != nil {
 		return browserapi.Tabs{}, err
 	}
-	defer connection.socket.CloseNow()
+	defer connection.close()
 	var targets struct {
 		List []struct {
 			ID    string `json:"targetId"`
@@ -227,7 +227,7 @@ func (b *Browser) cdp(ctx context.Context, command browserapi.CDPCommand) (json.
 	if err != nil {
 		return nil, err
 	}
-	defer connection.socket.CloseNow()
+	defer connection.close()
 	var session struct {
 		ID string `json:"sessionId"`
 	}

@@ -88,7 +88,9 @@ func (r *dockerRuntime) Create(ctx context.Context, name string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("create guest token file: %w", err)
 	}
-	defer os.Remove(envFile)
+	defer func() {
+		_ = os.Remove(envFile)
+	}()
 	output, err := r.call(ctx, "create",
 		"--name", namePrefix+name,
 		"--label", managedLabel+"="+managedValue,

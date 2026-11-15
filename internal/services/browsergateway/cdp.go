@@ -22,9 +22,11 @@ func (g *Gateway) browserSocket(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Chromium discovery returned %s", response.Status)
+		return "", fmt.Errorf("browser discovery returned %s", response.Status)
 	}
 	var version struct {
 		Socket string `json:"webSocketDebuggerUrl"`
@@ -37,7 +39,7 @@ func (g *Gateway) browserSocket(ctx context.Context) (string, error) {
 	if err != nil || endpoint.Scheme != "ws" || endpoint.Host != upstream.Host || endpoint.User != nil ||
 		endpoint.RawQuery != "" || endpoint.Fragment != "" || !strings.HasPrefix(endpoint.Path, "/devtools/browser/") ||
 		!browserSocketID.MatchString(strings.TrimPrefix(endpoint.Path, "/devtools/browser/")) {
-		return "", fmt.Errorf("Chromium discovery returned an invalid browser socket")
+		return "", fmt.Errorf("browser discovery returned an invalid socket")
 	}
 	return endpoint.String(), nil
 }
@@ -45,6 +47,10 @@ func (g *Gateway) browserSocket(ctx context.Context) (string, error) {
 type cdpConnection struct {
 	socket   *websocket.Conn
 	sequence int
+}
+
+func (c *cdpConnection) close() {
+	_ = c.socket.CloseNow()
 }
 
 func openCDP(ctx context.Context, endpoint string) (*cdpConnection, error) {
@@ -69,7 +75,7 @@ func (g *Gateway) CloseChromium(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	defer connection.socket.CloseNow()
+	defer connection.close()
 	_ = connection.call(ctx, "", "Browser.close", nil, nil)
 }
 

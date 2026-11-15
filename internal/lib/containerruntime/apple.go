@@ -78,7 +78,9 @@ func (r *appleRuntime) Create(ctx context.Context, name string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("create guest token file: %w", err)
 	}
-	defer os.Remove(envFile)
+	defer func() {
+		_ = os.Remove(envFile)
+	}()
 	// Use a short private path within macOS's Unix socket path limit.
 	directory, err := os.MkdirTemp("/tmp", appleSocketPrefix)
 	if err != nil {
@@ -118,7 +120,7 @@ func (r *appleRuntime) Start(ctx context.Context, id string) error {
 		return fmt.Errorf("check Apple guest socket directory: %w", err)
 	}
 	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
-		return fmt.Errorf("Apple guest socket directory %s must be private", directory)
+		return fmt.Errorf("guest socket directory %s must be private", directory)
 	}
 	_, err = invoke(ctx, r.path, "start", id)
 	return err

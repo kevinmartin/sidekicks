@@ -107,7 +107,9 @@ func (c *Client) request(ctx context.Context, method, path string, payload any) 
 	if err != nil {
 		return nil, fmt.Errorf("connect to browser guest: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		message, err := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
 		if err != nil {

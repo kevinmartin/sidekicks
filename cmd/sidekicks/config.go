@@ -220,7 +220,9 @@ func writeFile(path string, content []byte) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(file.Name())
+	defer func() {
+		_ = os.Remove(file.Name())
+	}()
 	if _, err := file.Write(content); err != nil {
 		_ = file.Close()
 		return err

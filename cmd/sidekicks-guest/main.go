@@ -145,7 +145,6 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen for guest API: %w", err)
 	}
-	defer listener.Close()
 	server := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -173,7 +172,7 @@ func run(ctx context.Context) error {
 			return shutdownErr
 		}
 		<-chromiumDone
-		return errors.Join(shutdownErr, errors.New("Chromium exited unexpectedly"), chromiumErr)
+		return errors.Join(shutdownErr, errors.New("browser process exited unexpectedly"), chromiumErr)
 	}
 }
 
