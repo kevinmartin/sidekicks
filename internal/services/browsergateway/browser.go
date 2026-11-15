@@ -20,11 +20,12 @@ var (
 
 // Browser controls Chromium and its Stagehand extension for the life of the guest.
 type Browser struct {
-	endpoint  string
-	primary   string
-	mu        sync.Mutex
-	stagehand *stagehand.Stagehand
-	pages     *stagehand.BrowserContext
+	endpoint     string
+	primary      string
+	mu           sync.Mutex
+	localBrowser *stagehand.Browser
+	stagehand    *stagehand.Stagehand
+	pages        *stagehand.BrowserContext
 }
 
 // OpenBrowser waits for Chromium and initializes the primary tab.
@@ -49,18 +50,27 @@ func (g *Gateway) OpenBrowser(ctx context.Context) (*Browser, error) {
 		return nil, err
 	}
 	defer connection.close()
-	var target struct {
-		ID string `json:"targetId"`
+	// The guest launches Chromium with about:blank. Discovery can become
+	// available before Chromium registers that page target.
+	for {
+		tabs, err := connection.pageTargets(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("find Chromium startup tab: %w", err)
+		}
+		for _, tab := range tabs {
+			if tab.URL == "about:blank" && tab.ID != "" {
+				return &Browser{
+					endpoint: endpoint,
+					primary:  tab.ID,
+				}, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("wait for Chromium startup tab: %w", ctx.Err())
+		case <-ticker.C:
+		}
 	}
-	if err := connection.call(ctx, "", "Target.createTarget", map[string]string{
-		"url": "about:blank",
-	}, &target); err != nil {
-		return nil, fmt.Errorf("create primary tab: %w", err)
-	}
-	return &Browser{
-		endpoint: endpoint,
-		primary:  target.ID,
-	}, nil
 }
 
 func (b *Browser) stagehandPages(ctx context.Context) (*stagehand.BrowserContext, error) {
@@ -71,22 +81,29 @@ func (b *Browser) stagehandPages(ctx context.Context) (*stagehand.BrowserContext
 	}
 	// The worker accepts one Stagehand session. Acquire it on the first typed
 	// command so existing external SDK clients can still use a fresh guest.
-	browser, err := stagehand.ConnectLocalBrowser(ctx, stagehand.LocalBrowserConnectOptions{
-		CDPURL:          b.endpoint,
-		ExtensionCDPURL: b.endpoint,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("connect Stagehand: %w", err)
+	// The SDK releases the browser claim after a worker RPC rejection and
+	// leaves the CDP connection open for a later initialization attempt.
+	if b.localBrowser == nil || b.localBrowser.Closed() {
+		browser, err := stagehand.ConnectLocalBrowser(ctx, stagehand.LocalBrowserConnectOptions{
+			CDPURL:          b.endpoint,
+			ExtensionCDPURL: b.endpoint,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("connect Stagehand: %w", err)
+		}
+		b.localBrowser = browser
 	}
 	client, err := stagehand.Create(ctx, stagehand.CreateOptions{
-		Browser: browser,
+		Browser: b.localBrowser,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize Stagehand: %w", err)
 	}
-	pages, err := browser.Context()
+	pages, err := b.localBrowser.Context()
 	if err != nil {
-		return nil, fmt.Errorf("get Stagehand browser context: %w", err)
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		return nil, errors.Join(fmt.Errorf("get Stagehand browser context: %w", err), client.Close(cleanup))
 	}
 	b.stagehand = client
 	b.pages = pages
@@ -109,6 +126,17 @@ func (b *Browser) tabs(ctx context.Context) (browserapi.Tabs, error) {
 		return browserapi.Tabs{}, err
 	}
 	defer connection.close()
+	tabs, err := connection.pageTargets(ctx)
+	if err != nil {
+		return browserapi.Tabs{}, err
+	}
+	return browserapi.Tabs{
+		Primary: b.primary,
+		Tabs:    tabs,
+	}, nil
+}
+
+func (c *cdpConnection) pageTargets(ctx context.Context) ([]browserapi.Tab, error) {
 	var targets struct {
 		List []struct {
 			ID    string `json:"targetId"`
@@ -117,16 +145,13 @@ func (b *Browser) tabs(ctx context.Context) (browserapi.Tabs, error) {
 			URL   string `json:"url"`
 		} `json:"targetInfos"`
 	}
-	if err := connection.call(ctx, "", "Target.getTargets", nil, &targets); err != nil {
-		return browserapi.Tabs{}, err
+	if err := c.call(ctx, "", "Target.getTargets", nil, &targets); err != nil {
+		return nil, err
 	}
-	result := browserapi.Tabs{
-		Primary: b.primary,
-		Tabs:    make([]browserapi.Tab, 0, len(targets.List)),
-	}
+	result := make([]browserapi.Tab, 0, len(targets.List))
 	for _, target := range targets.List {
 		if target.Type == "page" {
-			result.Tabs = append(result.Tabs, browserapi.Tab{
+			result = append(result, browserapi.Tab{
 				ID:    target.ID,
 				Title: target.Title,
 				URL:   target.URL,
@@ -237,7 +262,11 @@ func (b *Browser) cdp(ctx context.Context, command browserapi.CDPCommand) (json.
 			"targetId": id,
 			"flatten":  true,
 		}, &session); err != nil {
-			return nil, fmt.Errorf("%w: %q (%v)", errUnknownTab, id, err)
+			var protocolErr *cdpError
+			if errors.As(err, &protocolErr) && protocolErr.Message == "No target with given id found" {
+				return nil, fmt.Errorf("%w: %q", errUnknownTab, id)
+			}
+			return nil, fmt.Errorf("attach to tab %q: %w", id, err)
 		}
 	}
 	var params any
@@ -246,6 +275,10 @@ func (b *Browser) cdp(ctx context.Context, command browserapi.CDPCommand) (json.
 	}
 	var result json.RawMessage
 	if err := connection.call(ctx, session.ID, command.Method, params, &result); err != nil {
+		var protocolErr *cdpError
+		if session.ID != "" && errors.As(err, &protocolErr) && strings.HasSuffix(protocolErr.Message, "is only supported on the browser target") {
+			return nil, fmt.Errorf("%w: %s requires browser scope. Use --browser without --tab", errInvalidCommand, command.Method)
+		}
 		return nil, err
 	}
 	return result, nil

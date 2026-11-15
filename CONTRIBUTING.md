@@ -11,7 +11,7 @@ Use this layout when adding packages or moving code into its owning package.
 | `cmd/<binary>/` | Product entry points, startup and shutdown, config loading, dependency wiring, and command-specific route registration. |
 | `internal/services/<service>/` | Service behavior, transport handlers and their request and response types, and service-owned data access. |
 | `internal/domain/<capability>/` | Sidekicks business rules with a lifecycle independent of a service or transport, and the types those rules operate on. |
-| `internal/clients/<provider>/` | Reusable clients for APIs such as the Sidekicks browser guest, GitHub, and Slack. Services own the decisions about when to call them. |
+| `internal/clients/<provider>/` | Reusable clients for APIs such as the Sidekicks browser guest, GitHub, and Slack. The callers decide when to use them. |
 | `internal/harness/` | The future Sidekicks agent harness, including execution and tool orchestration. |
 | `internal/lib/<library>/` | Reusable protocol and infrastructure packages, such as Web Bot Auth and shared database connection setup. |
 | `extensions/sidekicks/` | The Sidekicks Chrome extension. Web Bot Auth is one feature module. |

@@ -9,7 +9,8 @@ artifacts in separate stages.
 ## Run a local browser
 
 On Apple silicon with macOS 26 or later, install Apple's `container` CLI
-and start its services with `container system start`. Build the browser image
+and start its services with `container system start`. Sidekicks was tested
+with `container` 1.7.1. Build the browser image
 into that runtime's image store with `make browser-image-apple`. For Docker on
 macOS or Linux, start Docker and run `make browser-image-docker`.
 
@@ -26,9 +27,18 @@ build/sidekicks browser delete --name web
 macOS defaults to `apple`. Linux uses `docker`. Run `build/sidekicks config
 set runtime docker` to set the default on macOS, or pass `--runtime docker`
 for a single command. The Docker backend uses the active local Unix-socket
-context. `config show` reports the effective setting and its source. Set
-`SIDEKICKS_BROWSER_IMAGE` when using a different local image tag.
-`list` shows running and stopped browsers in the selected runtime.
+context. `config show` reports the effective setting and its source. `list`
+shows running and stopped browsers in the selected runtime.
+
+For a custom image tag, pass `BROWSER_IMAGE=<tag>` to `make browser-image-apple`,
+`make browser-image-docker`, and `make cli-integration`. Set
+`SIDEKICKS_BROWSER_IMAGE=<tag>` when invoking `sidekicks` directly.
+
+The Docker adapter launches the browser container with `seccomp=unconfined`
+so Chromium can start its own namespace sandbox. This disables Docker's outer
+syscall filter for both Chromium and `sidekicks-guest` in the container.
+Before broader deployment, validate a profile derived from Docker's default
+on Linux and Docker Desktop that permits Chromium's sandbox setup.
 
 `browser tabs` lists live tab IDs. Browser commands and screenshots default
 to the primary tab and accept `--tab <id>` to target another tab. `browser cmd

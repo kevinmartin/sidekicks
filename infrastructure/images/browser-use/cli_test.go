@@ -72,12 +72,31 @@ func testCLILifecycle(t *testing.T, binary, backend string) {
 	require.NoError(t, json.Unmarshal(browser(name, "tabs"), &tabs))
 	primary := tabs.Primary
 	require.NotEmpty(t, primary)
+	require.Len(t, tabs.Tabs, 1)
+	require.Equal(t, primary, tabs.Tabs[0].ID)
+	require.Equal(t, "about:blank", tabs.Tabs[0].URL)
+	browser(name, "cdp", "--tab", primary, "Target.getTargets")
+	_, err := runCLI(t.Context(), binary, "--runtime", backend, "browser", "cdp", "--name", name, "--tab", primary, "SystemInfo.getInfo")
+	require.ErrorContains(t, err, "400 Bad Request")
+	require.ErrorContains(t, err, "requires browser scope")
 
 	const page = `<h1>CLI browser fixture</h1><label for="entry">Message</label><input id="entry"><button id="submit" onclick="document.getElementById('result').textContent = document.getElementById('entry').value">Submit</button><p id="result"></p>`
 	browser(name, "cmd", "goto", "data:text/html,"+url.PathEscape(page))
 	require.Contains(t, string(browser(name, "cmd", "snapshot")), "CLI browser fixture")
 	browser(name, "cmd", "type", "#entry", "Sidekicks is ready")
+	resultText := func() string {
+		var result struct {
+			Result struct {
+				Value string `json:"value"`
+			} `json:"result"`
+		}
+		data := browser(name, "cdp", "Runtime.evaluate", `{"expression":"document.querySelector('#result').textContent","returnByValue":true}`)
+		require.NoError(t, json.Unmarshal(data, &result))
+		return result.Result.Value
+	}
+	require.Empty(t, resultText())
 	browser(name, "cmd", "click", "xpath=//*[@id='submit']")
+	require.Equal(t, "Sidekicks is ready", resultText())
 	var popup struct {
 		ID string `json:"targetId"`
 	}
@@ -85,9 +104,12 @@ func testCLILifecycle(t *testing.T, binary, backend string) {
 	require.NotEmpty(t, popup.ID)
 	browser(name, "cdp", "--tab", popup.ID, "Page.navigate", `{"url":"data:text/html,%3Ch1%3EAlternate%20tab%3C%2Fh1%3E"}`)
 	require.Contains(t, string(browser(name, "cmd", "--tab", popup.ID, "snapshot")), "Alternate tab")
-	require.Contains(t, string(browser(name, "cmd", "snapshot")), "Sidekicks is ready")
+	require.Equal(t, "Sidekicks is ready", resultText())
 	browser(name, "cdp", "Target.closeTarget", `{"targetId":"`+popup.ID+`"}`)
-	_, err := runCLI(t.Context(), binary, "--runtime", backend, "browser", "cmd", "--name", name, "--tab", popup.ID, "snapshot")
+	_, err = runCLI(t.Context(), binary, "--runtime", backend, "browser", "cmd", "--name", name, "--tab", popup.ID, "snapshot")
+	require.ErrorContains(t, err, "tab unavailable")
+	_, err = runCLI(t.Context(), binary, "--runtime", backend, "browser", "cdp", "--name", name, "--tab", popup.ID, "Page.getFrameTree")
+	require.ErrorContains(t, err, "404 Not Found")
 	require.ErrorContains(t, err, "tab unavailable")
 	screenshot := filepath.Join(t.TempDir(), "page.png")
 	browser(name, "screenshot", "-o", screenshot)
@@ -100,20 +122,21 @@ func testCLILifecycle(t *testing.T, binary, backend string) {
 
 	// Set a persistent cookie for an inert origin via CDP. The test needs no external server.
 	require.Contains(t, string(browser(name, "cdp", "Network.setCookie", `{"name":"sidekicks-persist","value":"test","url":"https://sidekicks.test/","expires":2147483647}`)), `"success":true`)
-	cookies := func() string {
-		return string(browser(name, "cdp", "Network.getCookies", `{"urls":["https://sidekicks.test/"]}`))
+	cookies := func(instance string) string {
+		return string(browser(instance, "cdp", "Network.getCookies", `{"urls":["https://sidekicks.test/"]}`))
 	}
-	require.Contains(t, cookies(), "sidekicks-persist")
+	require.Contains(t, cookies(name), "sidekicks-persist")
+	require.NotContains(t, cookies(other), "sidekicks-persist")
 	browser(name, "stop")
 	assertInstanceRunning(t, binary, backend, name, false)
 	browser(other, "cdp", "Browser.getVersion")
 	browser(name, "start")
 	require.NoError(t, json.Unmarshal(browser(name, "tabs"), &tabs))
 	require.NotEqual(t, primary, tabs.Primary)
-	require.Contains(t, cookies(), "sidekicks-persist")
+	require.Contains(t, cookies(name), "sidekicks-persist")
 	browser(name, "delete")
 	browser(name, "start")
-	require.NotContains(t, cookies(), "sidekicks-persist")
+	require.NotContains(t, cookies(name), "sidekicks-persist")
 }
 
 func testInstanceName() string {

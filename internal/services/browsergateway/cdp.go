@@ -49,6 +49,15 @@ type cdpConnection struct {
 	sequence int
 }
 
+type cdpError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e *cdpError) Error() string {
+	return fmt.Sprintf("(%d): %s", e.Code, e.Message)
+}
+
 func (c *cdpConnection) close() {
 	_ = c.socket.CloseNow()
 }
@@ -99,10 +108,7 @@ func (c *cdpConnection) call(ctx context.Context, session, method string, params
 		var reply struct {
 			ID     int             `json:"id"`
 			Result json.RawMessage `json:"result"`
-			Error  *struct {
-				Code    int    `json:"code"`
-				Message string `json:"message"`
-			} `json:"error"`
+			Error  *cdpError       `json:"error"`
 		}
 		if err := wsjson.Read(ctx, c.socket, &reply); err != nil {
 			return fmt.Errorf("read %s: %w", method, err)
@@ -111,7 +117,7 @@ func (c *cdpConnection) call(ctx context.Context, session, method string, params
 			continue
 		}
 		if reply.Error != nil {
-			return fmt.Errorf("%s (%d): %s", method, reply.Error.Code, reply.Error.Message)
+			return fmt.Errorf("%s %w", method, reply.Error)
 		}
 		if result == nil {
 			return nil

@@ -109,6 +109,9 @@ func TestConfigCommandsPersistOnlyTheFileValue(t *testing.T) {
 	t.Setenv("SIDEKICKS_RUNTIME", "invalid")
 	require.Equal(t, "docker\n", executeCLI(t, "config", "get", "runtime", "--runtime", "docker"))
 	executeCLI(t, "config", "unset", "runtime")
+	file, err = os.ReadFile(config)
+	require.NoError(t, err)
+	require.NotContains(t, string(file), "runtime:")
 	t.Setenv("SIDEKICKS_RUNTIME", "")
 	require.Equal(t, defaultRuntime+"\n", executeCLI(t, "config", "get", "runtime"))
 }
