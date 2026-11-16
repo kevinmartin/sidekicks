@@ -120,12 +120,10 @@ jobs:
           persist-credentials: false
       - name: Build the images
         run: |
-          for image in browser-use browser-dev-tools; do
-            docker buildx build --load \
-              --build-context sidekicks_src=. \
-              --tag "sidekicks-${image}:ci" \
-              "infrastructure/images/${image}"
-          done
+          docker buildx build --load --file infrastructure/images/browser-use/Dockerfile \
+            --tag sidekicks-browser-use:ci .
+          docker buildx build --load --build-context sidekicks_src=. \
+            --tag sidekicks-browser-dev-tools:ci infrastructure/images/browser-dev-tools
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -144,6 +142,10 @@ jobs:
           }
           APPARMOR
           fi
+      - name: Exercise the local Docker CLI lifecycle
+        env:
+          SIDEKICKS_RUNTIME: docker
+        run: make cli-integration BROWSER_IMAGE=sidekicks-browser-use:ci
       - name: Deploy the built images to kind
         id: deploy
         run: |

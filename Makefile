@@ -13,6 +13,8 @@ DEV_NAMESPACE := sidekicks-dev
 DEV_MANIFESTS := infrastructure/kubernetes/dev
 DEV_BROWSER_IMAGE := sidekicks-browser-use:latest
 DEV_TOOLS_IMAGE := sidekicks-browser-dev-tools:latest
+BROWSER_IMAGE ?= $(DEV_BROWSER_IMAGE)
+BROWSER_DOCKERFILE := infrastructure/images/browser-use/Dockerfile
 DEV_GATEWAY_TOKEN := $(DEV_BUILD_PATH)/gateway-token
 DEV_TLS_KEY := $(DEV_BUILD_PATH)/tls.key
 DEV_TLS_CERT := $(DEV_BUILD_PATH)/tls.crt
@@ -40,6 +42,23 @@ integration:
 		BROWSER_GATEWAY_TOKEN="$${BROWSER_GATEWAY_TOKEN:-$$(cat "$(DEV_GATEWAY_TOKEN)" 2>/dev/null)}" \
 		go test -v -count=1 -tags=integration ./...
 
+.PHONY    : sidekicks
+sidekicks :
+	go build -o "$(BUILD_PATH)/sidekicks" ./cmd/sidekicks
+
+.PHONY              : browser-image-apple
+browser-image-apple :
+	container build -f "$(BROWSER_DOCKERFILE)" -t "$(BROWSER_IMAGE)" .
+
+.PHONY               : browser-image-docker
+browser-image-docker :
+	docker build -f "$(BROWSER_DOCKERFILE)" -t "$(BROWSER_IMAGE)" .
+
+.PHONY          : cli-integration
+cli-integration : sidekicks
+	SIDEKICKS_CLI_BINARY="$(abspath $(BUILD_PATH)/sidekicks)" SIDEKICKS_BROWSER_IMAGE="$(BROWSER_IMAGE)" \
+		go test -v -count=1 -tags=integration -timeout=10m -run '^TestBrowserCLI$$' ./infrastructure/images/browser-use
+
 .PHONY: dev
 dev   :
 	$(MAKE) container-build
@@ -48,8 +67,7 @@ dev   :
 
 .PHONY         : container-build
 container-build:
-	docker --context desktop-linux build --build-context sidekicks_src=. \
-		-t "$(DEV_BROWSER_IMAGE)" infrastructure/images/browser-use
+	docker --context desktop-linux build -f "$(BROWSER_DOCKERFILE)" -t "$(DEV_BROWSER_IMAGE)" .
 	docker --context desktop-linux build --build-context sidekicks_src=. \
 		-t "$(DEV_TOOLS_IMAGE)" infrastructure/images/browser-dev-tools
 

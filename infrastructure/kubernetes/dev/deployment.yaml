@@ -26,11 +26,6 @@ spec:
         - name: browser
           image: sidekicks-browser-use
           imagePullPolicy: Never
-          args:
-            - --remote-debugging-address=$(BROWSER_CDP_HOST)
-            - --remote-debugging-port=$(BROWSER_CDP_PORT)
-            - --ignore-certificate-errors-spki-list=$(WBA_FIXTURE_SPKI)
-            - about:blank
           envFrom:
             - configMapRef:
                 name: sidekicks-browser-settings
@@ -42,34 +37,6 @@ spec:
                 secretKeyRef:
                   name: sidekicks-dev-config
                   key: fixture-spki
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: [ALL]
-            # Local smoke configuration for Chromium's user-namespace sandbox.
-            seccompProfile:
-              type: Unconfined
-          volumeMounts:
-            - name: profile
-              mountPath: /home/browser
-            - name: tmp
-              mountPath: /tmp
-            - name: shm
-              mountPath: /dev/shm
-            - name: broker
-              mountPath: /run/sidekicks/wba
-              readOnly: true
-        - name: gateway
-          image: sidekicks-browser-dev-tools
-          imagePullPolicy: Never
-          command: [/browser-gateway]
-          envFrom:
-            - configMapRef:
-                name: sidekicks-browser-settings
-          env:
-            - name: BROWSER_CDP_ADDRESS
-              value: $(BROWSER_CDP_HOST):$(BROWSER_CDP_PORT)
             - name: BROWSER_GATEWAY_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -89,6 +56,19 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+            # Local smoke configuration for Chromium's user-namespace sandbox.
+            seccompProfile:
+              type: Unconfined
+          volumeMounts:
+            - name: profile
+              mountPath: /home/browser
+            - name: tmp
+              mountPath: /tmp
+            - name: shm
+              mountPath: /dev/shm
+            - name: broker
+              mountPath: /run/sidekicks/wba
+              readOnly: true
         - name: wba-fixture
           image: sidekicks-browser-dev-tools
           imagePullPolicy: Never
