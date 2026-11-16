@@ -23,7 +23,7 @@ type Browser struct {
 	endpoint     string
 	primary      string
 	mu           sync.Mutex
-	localBrowser *stagehand.Browser
+	localBrowser *stagehandBrowser
 	stagehand    *stagehandSession
 	staleWorker  stagehandWorker
 }
@@ -134,7 +134,7 @@ func (b *Browser) command(ctx context.Context, command browserapi.Command) (any,
 		return nil, err
 	}
 	result, err := b.runCommand(ctx, session, command)
-	if stagehandDisconnected(err) {
+	if stagehandSessionLost(err) {
 		b.discardStagehand(session)
 	}
 	return result, err

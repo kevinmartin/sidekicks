@@ -3,6 +3,7 @@ package browsergateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,6 +60,53 @@ func TestStagehandCommandRetriesWorkerDiscoveryAndReattaches(t *testing.T) {
 	require.Zero(t, fixture.stops.Load())
 }
 
+func TestStagehandCommandRecoversWhenWorkerRestartsWithSocketOpen(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		noLoopback bool
+		wantError  string
+	}{
+		{
+			name:      "detached CDP session",
+			wantError: "Session with given id not found",
+		},
+		{
+			name:       "reattached worker without Stagehand session",
+			noLoopback: true,
+			wantError:  "Stagehand loopback CDP is not configured",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := &stagehandTestFixture{
+				noLoopback: tc.noLoopback,
+			}
+			browser := fixture.browser(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			command := browserapi.Command{
+				Operation: "snapshot",
+			}
+			before, err := browser.command(ctx, command)
+			require.NoError(t, err)
+			for attempt := range 3 {
+				fixture.restarts.Add(1)
+				_, err = browser.command(ctx, command)
+				require.ErrorContains(t, err, tc.wantError)
+				require.Equal(t, int32(attempt+1), fixture.inits.Load())
+
+				after, err := browser.command(ctx, command)
+				require.NoError(t, err)
+				require.Equal(t, before, after)
+				require.Equal(t, int32(attempt+2), fixture.connections.Load())
+				require.Zero(t, fixture.stops.Load(), "the replacement worker should stay alive")
+				require.Eventually(t, func() bool {
+					return fixture.activeSockets.Load() == 1
+				}, time.Second, time.Millisecond, "only the current SDK socket should remain")
+			}
+		})
+	}
+}
+
 func TestStagehandDisconnectPreservesBufferedReply(t *testing.T) {
 	fixture := &stagehandTestFixture{
 		snapshotWaiting: make(chan struct{}),
@@ -94,9 +142,12 @@ type stagehandTestFixture struct {
 	missingWorker   atomic.Bool
 	lostAttachment  atomic.Bool
 	connections     atomic.Int32
+	activeSockets   atomic.Int32
 	inits           atomic.Int32
 	stops           atomic.Int32
+	restarts        atomic.Int32
 	snapshotWaiting chan struct{}
+	noLoopback      bool
 }
 
 func (fixture *stagehandTestFixture) browser(t *testing.T) *Browser {
@@ -111,7 +162,13 @@ func (fixture *stagehandTestFixture) browser(t *testing.T) *Browser {
 			_ = socket.CloseNow()
 		}()
 		var sdkConnection bool
+		var sdkGeneration int32
 		var pendingSnapshot uint64
+		defer func() {
+			if sdkConnection {
+				fixture.activeSockets.Add(-1)
+			}
+		}()
 		for {
 			var request struct {
 				ID      int    `json:"id"`
@@ -132,7 +189,9 @@ func (fixture *stagehandTestFixture) browser(t *testing.T) *Browser {
 			switch request.Method {
 			case "Extensions.getExtensions":
 				sdkConnection = true
+				sdkGeneration = fixture.restarts.Load()
 				fixture.connections.Add(1)
+				fixture.activeSockets.Add(1)
 				response["result"] = json.RawMessage(`{"extensions":[{"id":"` + StagehandExtensionID + `","name":"Stagehand Runtime","version":"1.2.0","path":"/stagehand","enabled":true}]}`)
 			case "Target.getTargets":
 				response["result"] = json.RawMessage(`{"targetInfos":[{"targetId":"worker","url":"` + stagehandWorkerURL + `","type":"service_worker"},{"targetId":"primary","type":"page"}]}`)
@@ -140,12 +199,10 @@ func (fixture *stagehandTestFixture) browser(t *testing.T) *Browser {
 					response["result"] = json.RawMessage(`{"targetInfos":[]}`)
 				}
 			case "Runtime.getIsolateId":
-				isolate := "original-isolate"
-				if fixture.stops.Load() != 0 {
-					isolate = "replacement-isolate"
-				}
 				// The replacement can reuse the original CDP target ID.
-				response["result"] = json.RawMessage(`{"id":"` + isolate + `"}`)
+				response["result"] = map[string]any{
+					"id": fmt.Sprintf("worker-isolate-%d", fixture.stops.Load()+fixture.restarts.Load()),
+				}
 			case "Target.attachToTarget":
 				response["result"] = json.RawMessage(`{"sessionId":"worker-session"}`)
 			case "Target.closeTarget":
@@ -158,7 +215,9 @@ func (fixture *stagehandTestFixture) browser(t *testing.T) *Browser {
 					response["result"] = json.RawMessage(`{"result":{"value":{"hasReceiver":true,"marker":{"protocolVersion":"3.0.0","serverInfo":{"name":"stagehand","version":"1.2.0"}}}}}`)
 					break
 				}
-				if strings.Contains(request.Params.Expression, `\"method\":\"stagehand.init\"`) && fixture.lostAttachment.Swap(false) {
+				stale := sdkConnection && sdkGeneration != fixture.restarts.Load()
+				initDetached := strings.Contains(request.Params.Expression, `\"method\":\"stagehand.init\"`) && fixture.lostAttachment.Swap(false)
+				if initDetached || (stale && !fixture.noLoopback) {
 					delete(response, "result")
 					response["error"] = &cdpError{
 						Code:    -32001,
@@ -166,7 +225,7 @@ func (fixture *stagehandTestFixture) browser(t *testing.T) *Browser {
 					}
 					break
 				}
-				if !fixture.reply(ctx, t, socket, request.Session, request.Params.Expression, &pendingSnapshot) {
+				if !fixture.reply(ctx, t, socket, request.Session, request.Params.Expression, &pendingSnapshot, stale) {
 					return
 				}
 				response["result"] = json.RawMessage(`{"result":{"value":true}}`)
@@ -201,6 +260,7 @@ func (fixture *stagehandTestFixture) reply(
 	socket *websocket.Conn,
 	session, expression string,
 	pendingSnapshot *uint64,
+	stale bool,
 ) bool {
 	t.Helper()
 	encoded := strings.TrimSuffix(strings.TrimPrefix(expression, "void globalThis.__stagehandReceiveFromHost("), "); true")
@@ -215,10 +275,16 @@ func (fixture *stagehandTestFixture) reply(
 	if !assert.NoError(t, json.Unmarshal([]byte(payload), &request)) {
 		return false
 	}
+	if stale {
+		return replyStagehandRPC(ctx, t, socket, session, request.ID, "error", &cdpError{
+			Code:    -32603,
+			Message: "Stagehand loopback CDP is not configured",
+		})
+	}
 	var result json.RawMessage
 	switch request.Method {
 	case "stagehand.init":
-		assert.Equal(t, fixture.inits.Load(), fixture.stops.Load(), "the original worker must stop before reinitializing")
+		assert.Equal(t, fixture.inits.Load(), fixture.stops.Load()+fixture.restarts.Load(), "the original worker must stop before reinitializing")
 		fixture.inits.Add(1)
 		result = json.RawMessage(`{"initialized":true,"pages":[]}`)
 	case "context.pages":
@@ -236,7 +302,7 @@ func (fixture *stagehandTestFixture) reply(
 				close(fixture.snapshotWaiting)
 				return true
 			}
-			replyStagehandRPC(ctx, t, socket, session, *pendingSnapshot, result)
+			replyStagehandRPC(ctx, t, socket, session, *pendingSnapshot, "result", result)
 			return false
 		}
 	case "stagehand.close":
@@ -245,15 +311,15 @@ func (fixture *stagehandTestFixture) reply(
 		t.Errorf("unexpected Stagehand method %s", request.Method)
 		return false
 	}
-	return replyStagehandRPC(ctx, t, socket, session, request.ID, result)
+	return replyStagehandRPC(ctx, t, socket, session, request.ID, "result", result)
 }
 
-func replyStagehandRPC(ctx context.Context, t *testing.T, socket *websocket.Conn, session string, id uint64, result json.RawMessage) bool {
+func replyStagehandRPC(ctx context.Context, t *testing.T, socket *websocket.Conn, session string, id uint64, kind string, value any) bool {
 	t.Helper()
 	data, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
-		"result":  result,
+		kind:      value,
 	})
 	if !assert.NoError(t, err) {
 		return false

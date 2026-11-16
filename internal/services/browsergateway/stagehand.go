@@ -16,6 +16,11 @@ const StagehandExtensionID = "mibgiokgnjiohdeccdpmccjlfpdoliim"
 const stagehandWorkerURL = "chrome-extension://" + StagehandExtensionID + "/service-worker.js"
 const stagehandWorkerPollInterval = 50 * time.Millisecond
 
+type stagehandBrowser struct {
+	sdk       *stagehand.Browser
+	transport *stagehandTransport
+}
+
 type stagehandSession struct {
 	client *stagehand.Stagehand
 	pages  *stagehand.BrowserContext
@@ -29,6 +34,18 @@ type stagehandWorker struct {
 
 func stagehandDisconnected(err error) bool {
 	return errors.Is(err, stagehand.ErrCDPConnectionClosed) || errors.Is(err, stagehand.ErrCDPClientClosed)
+}
+
+func stagehandSessionLost(err error) bool {
+	if stagehandDisconnected(err) || stagehandAttachmentLost(err) {
+		return true
+	}
+	// A replacement worker can retain the CDP session ID while losing its
+	// Stagehand session. These errors come from the worker's session lookup.
+	var rpcErr *stagehand.RPCError
+	return errors.As(err, &rpcErr) &&
+		(rpcErr.Message == "Stagehand loopback CDP is not configured" ||
+			rpcErr.Message == "Stagehand loopback CDP is disconnected")
 }
 
 func (b *Browser) stagehandForCommand(ctx context.Context) (*stagehandSession, error) {
@@ -66,27 +83,36 @@ func (b *Browser) initializeStagehand(ctx context.Context) (*stagehandSession, e
 	// Acquire the worker on the first typed command so external SDK clients
 	// can still use a fresh guest. A worker RPC rejection releases the claim
 	// but leaves the SDK's browser connection available for another attempt.
-	if b.localBrowser == nil || b.localBrowser.Closed() {
+	if b.localBrowser == nil || b.localBrowser.sdk.Closed() {
+		b.closeStagehandBrowser()
+		transport, err := newStagehandTransport(ctx, b.endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("open Stagehand transport: %w", err)
+		}
 		browser, err := stagehand.ConnectLocalBrowser(ctx, stagehand.LocalBrowserConnectOptions{
-			CDPURL:          b.endpoint,
+			CDPURL:          transport.endpoint,
 			ExtensionCDPURL: b.endpoint,
 		})
 		if err != nil {
+			transport.close()
 			return nil, fmt.Errorf("connect Stagehand: %w", err)
 		}
-		b.localBrowser = browser
+		b.localBrowser = &stagehandBrowser{
+			sdk:       browser,
+			transport: transport,
+		}
 	}
 	worker, err := b.stagehandWorker(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("find Stagehand worker: %w", err)
 	}
 	client, err := stagehand.Create(ctx, stagehand.CreateOptions{
-		Browser: b.localBrowser,
+		Browser: b.localBrowser.sdk,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize Stagehand: %w", err)
 	}
-	pages, err := b.localBrowser.Context()
+	pages, err := b.localBrowser.sdk.Context()
 	if err != nil {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 		defer cancel()
@@ -100,6 +126,9 @@ func (b *Browser) initializeStagehand(ctx context.Context) (*stagehandSession, e
 }
 
 func stagehandAttachmentLost(err error) bool {
+	if err == nil {
+		return false
+	}
 	// The pinned SDK keeps CDP protocol errors private. A lost target or
 	// session here means Chromium rejected the call before dispatching it.
 	message := err.Error()
@@ -113,18 +142,25 @@ func (b *Browser) discardStagehand(session *stagehandSession) {
 	if b.stagehand != session {
 		return
 	}
-	// A disconnected SDK cannot release the session in the worker. Retire
-	// that worker before attaching again. The SDK drains buffered RPC replies
-	// before shutting down, allowing other in-flight calls to finish.
+	// Retire the worker we owned before attaching again. Closing the
+	// transport lets the SDK drain any buffered replies before it shuts down.
 	b.stagehand = nil
-	b.localBrowser = nil
 	b.staleWorker = session.worker
+	b.closeStagehandBrowser()
+}
+
+func (b *Browser) closeStagehandBrowser() {
+	if b.localBrowser != nil {
+		b.localBrowser.transport.close()
+		b.localBrowser = nil
+	}
 }
 
 // Close releases the Stagehand client.
 func (b *Browser) Close(ctx context.Context) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	defer b.closeStagehandBrowser()
 	if b.stagehand == nil {
 		return nil
 	}
