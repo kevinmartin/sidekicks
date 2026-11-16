@@ -207,20 +207,11 @@ func (b *Browser) cdp(ctx context.Context, command browserapi.CDPCommand) (json.
 		return nil, err
 	}
 	defer connection.close()
-	var session struct {
-		ID string `json:"sessionId"`
-	}
+	var session string
 	if !command.Browser && (command.Tab != "" || !browserScope(command.Method)) {
-		id := b.tabID(command.Tab)
-		if err := connection.call(ctx, "", "Target.attachToTarget", map[string]any{
-			"targetId": id,
-			"flatten":  true,
-		}, &session); err != nil {
-			var protocolErr *cdpError
-			if errors.As(err, &protocolErr) && protocolErr.Message == "No target with given id found" {
-				return nil, fmt.Errorf("%w: %q", errUnknownTab, id)
-			}
-			return nil, fmt.Errorf("attach to tab %q: %w", id, err)
+		session, err = connection.attachTab(ctx, b.tabID(command.Tab))
+		if err != nil {
+			return nil, err
 		}
 	}
 	var params any
@@ -228,9 +219,9 @@ func (b *Browser) cdp(ctx context.Context, command browserapi.CDPCommand) (json.
 		params = command.Params
 	}
 	var result json.RawMessage
-	if err := connection.call(ctx, session.ID, command.Method, params, &result); err != nil {
+	if err := connection.call(ctx, session, command.Method, params, &result); err != nil {
 		var protocolErr *cdpError
-		if session.ID != "" && errors.As(err, &protocolErr) && strings.HasSuffix(protocolErr.Message, "is only supported on the browser target") {
+		if session != "" && errors.As(err, &protocolErr) && strings.HasSuffix(protocolErr.Message, "is only supported on the browser target") {
 			return nil, fmt.Errorf("%w: %s requires browser scope. Use --browser without --tab", errInvalidCommand, command.Method)
 		}
 		return nil, err

@@ -3,6 +3,7 @@ package browsergateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -105,7 +106,16 @@ func (g *Gateway) CloseChromium(ctx context.Context) {
 	_ = connection.call(ctx, "", "Browser.close", nil, nil)
 }
 
-func (c *cdpConnection) call(ctx context.Context, session, method string, params, result any) error {
+type cdpMessage struct {
+	ID      int             `json:"id"`
+	Session string          `json:"sessionId"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+	Result  json.RawMessage `json:"result"`
+	Error   *cdpError       `json:"error"`
+}
+
+func (c *cdpConnection) send(ctx context.Context, session, method string, params any) (int, error) {
 	c.sequence++
 	request := struct {
 		ID      int    `json:"id"`
@@ -119,18 +129,28 @@ func (c *cdpConnection) call(ctx context.Context, session, method string, params
 		Params:  params,
 	}
 	if err := wsjson.Write(ctx, c.socket, request); err != nil {
-		return fmt.Errorf("send %s: %w", method, err)
+		return 0, fmt.Errorf("send %s: %w", method, err)
+	}
+	return request.ID, nil
+}
+
+func (c *cdpConnection) receive(ctx context.Context) (cdpMessage, error) {
+	var message cdpMessage
+	err := wsjson.Read(ctx, c.socket, &message)
+	return message, err
+}
+
+func (c *cdpConnection) call(ctx context.Context, session, method string, params, result any) error {
+	id, err := c.send(ctx, session, method, params)
+	if err != nil {
+		return err
 	}
 	for {
-		var reply struct {
-			ID     int             `json:"id"`
-			Result json.RawMessage `json:"result"`
-			Error  *cdpError       `json:"error"`
-		}
-		if err := wsjson.Read(ctx, c.socket, &reply); err != nil {
+		reply, err := c.receive(ctx)
+		if err != nil {
 			return fmt.Errorf("read %s: %w", method, err)
 		}
-		if reply.ID != request.ID {
+		if reply.ID != id {
 			continue
 		}
 		if reply.Error != nil {
@@ -144,4 +164,22 @@ func (c *cdpConnection) call(ctx context.Context, session, method string, params
 		}
 		return nil
 	}
+}
+
+func (c *cdpConnection) attachTab(ctx context.Context, id string) (string, error) {
+	var session struct {
+		ID string `json:"sessionId"`
+	}
+	err := c.call(ctx, "", "Target.attachToTarget", map[string]any{
+		"targetId": id,
+		"flatten":  true,
+	}, &session)
+	var protocolErr *cdpError
+	if errors.As(err, &protocolErr) && protocolErr.Message == "No target with given id found" {
+		return "", fmt.Errorf("%w: %q", errUnknownTab, id)
+	}
+	if err != nil {
+		return "", fmt.Errorf("attach to tab %q: %w", id, err)
+	}
+	return session.ID, nil
 }

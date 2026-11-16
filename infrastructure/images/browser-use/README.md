@@ -20,6 +20,7 @@ build/sidekicks --runtime "$sidekicks_example_runtime" browser start --name web
 build/sidekicks --runtime "$sidekicks_example_runtime" browser cmd --name web goto https://example.com
 build/sidekicks --runtime "$sidekicks_example_runtime" browser cmd --name web snapshot
 build/sidekicks --runtime "$sidekicks_example_runtime" browser screenshot --name web -o page.png
+build/sidekicks --runtime "$sidekicks_example_runtime" browser view --name web
 build/sidekicks --runtime "$sidekicks_example_runtime" browser stop --name web
 build/sidekicks --runtime "$sidekicks_example_runtime" browser delete --name web
 ```
@@ -41,9 +42,14 @@ Before broader deployment, validate a profile derived from Docker's default
 on Linux and Docker Desktop that permits Chromium's sandbox setup.
 
 `browser tabs` lists live tab IDs. Browser commands and screenshots default
-to the primary tab and accept `--tab <id>` to target another tab. `browser cmd
-click` takes a selector. `browser cmd type` takes a selector and the replacement
-text. Both accept CSS selectors and XPath selectors with an `xpath=` prefix.
+to the primary tab and accept `--tab <id>` to target another tab. `browser view`
+opens that tab in a local viewer with click, scroll, and keyboard input. Press
+Ctrl-C to end the viewer session and keep the browser running. Pass `--no-open` to copy the printed URL into your browser. To try the
+viewer alongside a browser started with an older image, build the current
+image and start a new named instance.
+
+`browser cmd click` takes a selector. `browser cmd type` takes a selector and
+the replacement text. Both accept CSS selectors and XPath selectors with an `xpath=` prefix.
 `browser cdp` takes a method and an optional JSON object as a second argument.
 Methods in the `Browser`, `Target`, and `SystemInfo` domains default to browser
 scope. Pass `--browser` to select browser scope explicitly.
@@ -120,7 +126,8 @@ browser command.
 flowchart LR
     CLI[sidekicks CLI] -->|start, stop, delete, list| Runtime[Apple container or Docker]
     Runtime -->|launch| Guest[sidekicks-guest]
-    CLI -->|authenticated browser commands| Guest
+    Viewer[Host browser] <-->|frames and input on host loopback| CLI
+    CLI <-->|authenticated commands and viewer stream| Guest
     Guest -->|launch and guest loopback CDP| Chromium
 ```
 

@@ -38,6 +38,9 @@ func TestBrowserCLI(t *testing.T) {
 	for _, backend := range strings.Fields(backends) {
 		t.Run(backend, func(t *testing.T) {
 			testCLILifecycle(t, binary, backend)
+			t.Run("viewer", func(t *testing.T) {
+				testCLIViewer(t, binary, backend)
+			})
 		})
 	}
 	if backends == "apple docker" {

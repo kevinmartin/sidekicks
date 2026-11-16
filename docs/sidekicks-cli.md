@@ -48,6 +48,7 @@ sidekicks browser cmd --name web snapshot
 sidekicks browser tabs --name web
 sidekicks browser cdp --name web Browser.getVersion
 sidekicks browser screenshot --name web -o page.png
+sidekicks browser view --name web
 sidekicks browser stop --name web
 sidekicks browser delete --name web
 ```
@@ -81,7 +82,11 @@ Update the existing Kubernetes dev deployment and port-forward for the guest lis
 
 ### 2. Browser viewer
 
-Expose the selected tab's display and input through the guest API and open the viewer on the CLI machine. Accept when a human can complete a manual interaction and the agent can inspect the result on the same tab. Switching focus to another tab must leave the agent's target intact.
+Serve the viewer from a temporary loopback address on the CLI machine. The foreground command prints the address and opens the default browser. Pass `--no-open` to open the printed link yourself. The link is valid while the command runs. Press Ctrl-C in the CLI to end the viewer session and keep the guest running.
+
+The CLI keeps the guest bearer token and relays display and input over the existing runtime connection. The guest streams CDP screencast frames for the selected tab and captures screenshots when Chromium pauses the screencast. The viewer sends mouse, scroll, and keyboard events to that tab.
+
+Accept when a human can complete a manual interaction and the agent can inspect the result on the same tab. Switching focus to another tab must leave the agent's target intact. Closing the selected tab ends its viewer stream.
 
 ### 3. Policy, WBA, and credentials
 

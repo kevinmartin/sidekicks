@@ -33,6 +33,7 @@ func newBrowserCommand(opts *options) *cobra.Command {
 		browser.typedCommands(),
 		browser.cdpCommand(),
 		browser.screenshotCommand(),
+		browser.viewCommand(),
 		&cobra.Command{
 			Use:   "tabs",
 			Short: "List live tab IDs and the primary tab",
