@@ -10,19 +10,18 @@ artifacts in separate stages.
 
 - For Apple `container` on Apple silicon with macOS 26 or later, install
   `container` and run `container system start` and `make browser-image-apple`.
-  Sidekicks was tested with `container` 1.7.1. Run
-  `export SIDEKICKS_RUNTIME=apple` in the shell you use for the example below.
+  Sidekicks was tested with `container` 1.7.1.
 - For Docker on macOS or Linux, start Docker and run `make browser-image-docker`.
-  Run `export SIDEKICKS_RUNTIME=docker` in the shell you use for the example below.
 
 ```sh
+sidekicks_example_runtime=apple # Set to docker if you ran make browser-image-docker.
 make sidekicks
-build/sidekicks browser start --name web
-build/sidekicks browser cmd --name web goto https://example.com
-build/sidekicks browser cmd --name web snapshot
-build/sidekicks browser screenshot --name web -o page.png
-build/sidekicks browser stop --name web
-build/sidekicks browser delete --name web
+build/sidekicks --runtime "$sidekicks_example_runtime" browser start --name web
+build/sidekicks --runtime "$sidekicks_example_runtime" browser cmd --name web goto https://example.com
+build/sidekicks --runtime "$sidekicks_example_runtime" browser cmd --name web snapshot
+build/sidekicks --runtime "$sidekicks_example_runtime" browser screenshot --name web -o page.png
+build/sidekicks --runtime "$sidekicks_example_runtime" browser stop --name web
+build/sidekicks --runtime "$sidekicks_example_runtime" browser delete --name web
 ```
 
 macOS defaults to `apple`. Linux uses `docker`. Run `build/sidekicks config
