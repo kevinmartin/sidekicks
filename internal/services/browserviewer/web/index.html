@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sidekicks Browser Viewer</title>
+  <link rel="stylesheet" href="/viewer.css">
+  <script src="/viewer.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Sidekicks <span>Browser viewer</span></h1>
+    <p id="status" role="status">Connecting…</p>
+  </header>
+  <main>
+    <div id="screen" tabindex="0" aria-label="Remote browser. Focus this area to send keyboard input.">
+      <img id="frame" alt="Live browser tab" draggable="false" hidden>
+      <p id="waiting">Waiting for the browser tab…</p>
+    </div>
+  </main>
+</body>
+</html>

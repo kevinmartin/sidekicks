@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/kevinmartin/sidekicks/internal/lib/browserapi"
 	"github.com/kevinmartin/sidekicks/internal/services/browsergateway"
 )
 
@@ -141,6 +142,7 @@ func run(ctx context.Context) error {
 	mux.HandleFunc("POST /v1/command", gateway.Authenticate(browser.Command))
 	mux.HandleFunc("POST /v1/cdp", gateway.Authenticate(browser.CDP))
 	mux.HandleFunc("GET /v1/screenshot", gateway.Authenticate(browser.Screenshot))
+	mux.HandleFunc("GET "+browserapi.ViewerPath, gateway.Authenticate(browser.Viewer))
 	listener, err := listen(cfg)
 	if err != nil {
 		return fmt.Errorf("listen for guest API: %w", err)
