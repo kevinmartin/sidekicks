@@ -62,7 +62,7 @@ func run(ctx context.Context) error {
 		"--user-data-dir=/home/browser/profile",
 		"--enable-unsafe-extension-debugging",
 		"--load-extension=" + extensions,
-		"--remote-allow-origins=chrome-extension://mibgiokgnjiohdeccdpmccjlfpdoliim",
+		"--remote-allow-origins=chrome-extension://" + browsergateway.StagehandExtensionID,
 		"--remote-debugging-address=" + cfg.CDPHost,
 		"--remote-debugging-port=" + cdpPort,
 	}

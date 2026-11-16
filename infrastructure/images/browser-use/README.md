@@ -48,9 +48,9 @@ text. Both accept CSS selectors and XPath selectors with an `xpath=` prefix.
 Methods in the `Browser`, `Target`, and `SystemInfo` domains default to browser
 scope. Pass `--browser` to select browser scope explicitly.
 
-If Stagehand reports that its CDP connection closed, stop and start the
-named browser to recover typed commands. The pinned Stagehand worker can
-retain the disconnected session. A stop and start preserves the browser profile.
+If a typed command reports a closed Stagehand CDP connection, the next typed
+command starts a fresh Stagehand session in the same browser. Check the page
+before retrying an interrupted action, since it may already have run.
 
 The integration test uses a temporary config directory. Run
 `make cli-integration` for the platform default or set `SIDEKICKS_RUNTIME`

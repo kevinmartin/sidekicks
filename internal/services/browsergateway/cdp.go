@@ -49,6 +49,23 @@ type cdpConnection struct {
 	sequence int
 }
 
+type cdpTarget struct {
+	ID    string `json:"targetId"`
+	Type  string `json:"type"`
+	Title string `json:"title"`
+	URL   string `json:"url"`
+}
+
+func (c *cdpConnection) targets(ctx context.Context) ([]cdpTarget, error) {
+	var targets struct {
+		List []cdpTarget `json:"targetInfos"`
+	}
+	if err := c.call(ctx, "", "Target.getTargets", nil, &targets); err != nil {
+		return nil, err
+	}
+	return targets.List, nil
+}
+
 type cdpError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`

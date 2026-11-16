@@ -24,8 +24,8 @@ type Browser struct {
 	primary      string
 	mu           sync.Mutex
 	localBrowser *stagehand.Browser
-	stagehand    *stagehand.Stagehand
-	pages        *stagehand.BrowserContext
+	stagehand    *stagehandSession
+	staleWorker  stagehandWorker
 }
 
 // OpenBrowser waits for Chromium and initializes the primary tab.
@@ -73,53 +73,6 @@ func (g *Gateway) OpenBrowser(ctx context.Context) (*Browser, error) {
 	}
 }
 
-func (b *Browser) stagehandPages(ctx context.Context) (*stagehand.BrowserContext, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.pages != nil {
-		return b.pages, nil
-	}
-	// The worker accepts one Stagehand session. Acquire it on the first typed
-	// command so existing external SDK clients can still use a fresh guest.
-	// The SDK releases the browser claim after a worker RPC rejection and
-	// leaves the CDP connection open for a later initialization attempt.
-	if b.localBrowser == nil || b.localBrowser.Closed() {
-		browser, err := stagehand.ConnectLocalBrowser(ctx, stagehand.LocalBrowserConnectOptions{
-			CDPURL:          b.endpoint,
-			ExtensionCDPURL: b.endpoint,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("connect Stagehand: %w", err)
-		}
-		b.localBrowser = browser
-	}
-	client, err := stagehand.Create(ctx, stagehand.CreateOptions{
-		Browser: b.localBrowser,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("initialize Stagehand: %w", err)
-	}
-	pages, err := b.localBrowser.Context()
-	if err != nil {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer cancel()
-		return nil, errors.Join(fmt.Errorf("get Stagehand browser context: %w", err), client.Close(cleanup))
-	}
-	b.stagehand = client
-	b.pages = pages
-	return pages, nil
-}
-
-// Close releases the Stagehand client.
-func (b *Browser) Close(ctx context.Context) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.stagehand == nil {
-		return nil
-	}
-	return b.stagehand.Close(ctx)
-}
-
 func (b *Browser) tabs(ctx context.Context) (browserapi.Tabs, error) {
 	connection, err := openCDP(ctx, b.endpoint)
 	if err != nil {
@@ -137,19 +90,12 @@ func (b *Browser) tabs(ctx context.Context) (browserapi.Tabs, error) {
 }
 
 func (c *cdpConnection) pageTargets(ctx context.Context) ([]browserapi.Tab, error) {
-	var targets struct {
-		List []struct {
-			ID    string `json:"targetId"`
-			Type  string `json:"type"`
-			Title string `json:"title"`
-			URL   string `json:"url"`
-		} `json:"targetInfos"`
-	}
-	if err := c.call(ctx, "", "Target.getTargets", nil, &targets); err != nil {
+	targets, err := c.targets(ctx)
+	if err != nil {
 		return nil, err
 	}
-	result := make([]browserapi.Tab, 0, len(targets.List))
-	for _, target := range targets.List {
+	result := make([]browserapi.Tab, 0, len(targets))
+	for _, target := range targets {
 		if target.Type == "page" {
 			result = append(result, browserapi.Tab{
 				ID:    target.ID,
@@ -168,12 +114,8 @@ func (b *Browser) tabID(tab string) string {
 	return tab
 }
 
-func (b *Browser) page(ctx context.Context, tab string) (*stagehand.Page, error) {
-	stagehand, err := b.stagehandPages(ctx)
-	if err != nil {
-		return nil, err
-	}
-	pages, err := stagehand.Pages(ctx)
+func (b *Browser) page(ctx context.Context, session *stagehandSession, tab string) (*stagehand.Page, error) {
+	pages, err := session.pages.Pages(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +129,21 @@ func (b *Browser) page(ctx context.Context, tab string) (*stagehand.Page, error)
 }
 
 func (b *Browser) command(ctx context.Context, command browserapi.Command) (any, error) {
-	page, err := b.page(ctx, command.Tab)
+	session, err := b.stagehandForCommand(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := b.runCommand(ctx, session, command)
+	if stagehandDisconnected(err) {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		err = errors.Join(err, b.discardStagehand(cleanup, session))
+	}
+	return result, err
+}
+
+func (b *Browser) runCommand(ctx context.Context, session *stagehandSession, command browserapi.Command) (any, error) {
+	page, err := b.page(ctx, session, command.Tab)
 	if err != nil {
 		return nil, err
 	}
