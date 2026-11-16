@@ -8,11 +8,12 @@ artifacts in separate stages.
 
 ## Run a local browser
 
-On Apple silicon with macOS 26 or later, install Apple's `container` CLI
-and start its services with `container system start`. Sidekicks was tested
-with `container` 1.7.1. Build the browser image
-into that runtime's image store with `make browser-image-apple`. For Docker on
-macOS or Linux, start Docker and run `make browser-image-docker`.
+- For Apple `container` on Apple silicon with macOS 26 or later, install
+  `container` and run `container system start` and `make browser-image-apple`.
+  Sidekicks was tested with `container` 1.7.1. Run
+  `export SIDEKICKS_RUNTIME=apple` in the shell you use for the example below.
+- For Docker on macOS or Linux, start Docker and run `make browser-image-docker`.
+  Run `export SIDEKICKS_RUNTIME=docker` in the shell you use for the example below.
 
 ```sh
 make sidekicks
@@ -48,10 +49,17 @@ text. Both accept CSS selectors and XPath selectors with an `xpath=` prefix.
 Methods in the `Browser`, `Target`, and `SystemInfo` domains default to browser
 scope. Pass `--browser` to select browser scope explicitly.
 
-Run `make cli-integration` for the selected runtime. Run
-`SIDEKICKS_TEST_BOTH=1 make cli-integration` on macOS after building the image
-into both runtimes to exercise both lifecycles and verify that their instance
-names are independent. [CLI design](../../../docs/sidekicks-cli.md)
+If Stagehand reports that its CDP connection closed, stop and start the
+named browser to recover typed commands. The pinned Stagehand worker can
+retain the disconnected session. A stop and start preserves the browser profile.
+
+The integration test uses a temporary config directory. Run
+`make cli-integration` for the platform default or set `SIDEKICKS_RUNTIME`
+explicitly, for example `SIDEKICKS_RUNTIME=docker make cli-integration` on
+macOS. After building the image into both runtimes, run
+`SIDEKICKS_TEST_BOTH=1 make cli-integration` on macOS to exercise both
+lifecycles and verify that their instance names are independent.
+[CLI design](../../../docs/sidekicks-cli.md)
 
 ## Local Kubernetes development
 
@@ -178,10 +186,12 @@ rejects readiness messages older than twelve seconds. Use a fresh blank tab
 for signed navigation after a detach.
 
 The Kubernetes dev browser runs with a read-only root filesystem and dropped
-capabilities. Its outer seccomp profile allows Chromium to start its own
-user-namespace sandbox. Validate the deployment profile on the target Kata
-runtime. Keep the production signing broker and signing credentials outside
-the browser workload. Force-install the production extension under a stable ID.
+capabilities. The browser container overrides the pod's `RuntimeDefault`
+seccomp profile with `Unconfined`. This disables the outer syscall filter
+so Chromium can start its own user-namespace sandbox. Validate a restrictive
+profile on the target Kata runtime. Keep the production signing broker and
+signing credentials outside the browser workload. Force-install the production
+extension under a stable ID.
 
 ## Base image and maintenance
 
