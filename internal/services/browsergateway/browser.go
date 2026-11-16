@@ -135,9 +135,7 @@ func (b *Browser) command(ctx context.Context, command browserapi.Command) (any,
 	}
 	result, err := b.runCommand(ctx, session, command)
 	if stagehandDisconnected(err) {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer cancel()
-		err = errors.Join(err, b.discardStagehand(cleanup, session))
+		b.discardStagehand(session)
 	}
 	return result, err
 }

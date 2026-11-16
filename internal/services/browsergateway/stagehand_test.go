@@ -19,9 +19,89 @@ import (
 )
 
 func TestStagehandCommandRecoversAfterTransportDisconnect(t *testing.T) {
-	fixture, stopFixture := context.WithCancel(t.Context())
-	var disconnect atomic.Bool
-	var inits, stops atomic.Int32
+	fixture := &stagehandTestFixture{}
+	browser := fixture.browser(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	command := browserapi.Command{
+		Operation: "snapshot",
+	}
+	before, err := browser.command(ctx, command)
+	require.NoError(t, err)
+	fixture.disconnect.Store(true)
+	_, err = browser.command(ctx, command)
+	require.ErrorIs(t, err, stagehand.ErrCDPConnectionClosed)
+	require.EqualValues(t, 1, fixture.inits.Load())
+	require.Zero(t, fixture.stops.Load())
+	after, err := browser.command(ctx, command)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	require.EqualValues(t, 2, fixture.inits.Load())
+	require.EqualValues(t, 1, fixture.stops.Load())
+}
+
+func TestStagehandCommandRetriesWorkerDiscoveryAndReattaches(t *testing.T) {
+	fixture := &stagehandTestFixture{}
+	fixture.missingWorker.Store(true)
+	fixture.lostAttachment.Store(true)
+	browser := fixture.browser(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	result, err := browser.command(ctx, browserapi.Command{
+		Operation: "snapshot",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, fixture.missingWorker.Load())
+	require.False(t, fixture.lostAttachment.Load())
+	require.EqualValues(t, 2, fixture.connections.Load())
+	require.EqualValues(t, 1, fixture.inits.Load())
+	require.Zero(t, fixture.stops.Load())
+}
+
+func TestStagehandDisconnectPreservesBufferedReply(t *testing.T) {
+	fixture := &stagehandTestFixture{
+		snapshotWaiting: make(chan struct{}),
+	}
+	browser := fixture.browser(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	command := browserapi.Command{
+		Operation: "snapshot",
+	}
+	first := make(chan error, 1)
+	go func() {
+		_, err := browser.command(ctx, command)
+		first <- err
+	}()
+	select {
+	case <-fixture.snapshotWaiting:
+	case <-ctx.Done():
+		t.Fatal("Chromium did not receive the first snapshot request")
+	}
+	_, err := browser.command(ctx, command)
+	require.ErrorIs(t, err, stagehand.ErrCDPConnectionClosed)
+	select {
+	case err := <-first:
+		require.NoError(t, err)
+	case <-ctx.Done():
+		t.Fatal("the first snapshot did not receive its buffered reply")
+	}
+}
+
+type stagehandTestFixture struct {
+	disconnect      atomic.Bool
+	missingWorker   atomic.Bool
+	lostAttachment  atomic.Bool
+	connections     atomic.Int32
+	inits           atomic.Int32
+	stops           atomic.Int32
+	snapshotWaiting chan struct{}
+}
+
+func (fixture *stagehandTestFixture) browser(t *testing.T) *Browser {
+	t.Helper()
+	ctx, stopFixture := context.WithCancel(context.WithoutCancel(t.Context()))
 	chromium := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		socket, err := websocket.Accept(w, r, nil)
 		if !assert.NoError(t, err) {
@@ -30,6 +110,8 @@ func TestStagehandCommandRecoversAfterTransportDisconnect(t *testing.T) {
 		defer func() {
 			_ = socket.CloseNow()
 		}()
+		var sdkConnection bool
+		var pendingSnapshot uint64
 		for {
 			var request struct {
 				ID      int    `json:"id"`
@@ -40,87 +122,85 @@ func TestStagehandCommandRecoversAfterTransportDisconnect(t *testing.T) {
 					TargetID   string `json:"targetId"`
 				} `json:"params"`
 			}
-			if err := wsjson.Read(fixture, socket, &request); err != nil {
+			if err := wsjson.Read(ctx, socket, &request); err != nil {
 				return
 			}
-			result := json.RawMessage(`{}`)
+			response := map[string]any{
+				"id":     request.ID,
+				"result": json.RawMessage(`{}`),
+			}
 			switch request.Method {
 			case "Extensions.getExtensions":
-				result = json.RawMessage(`{"extensions":[{"id":"` + StagehandExtensionID + `","name":"Stagehand Runtime","version":"1.2.0","path":"/stagehand","enabled":true}]}`)
+				sdkConnection = true
+				fixture.connections.Add(1)
+				response["result"] = json.RawMessage(`{"extensions":[{"id":"` + StagehandExtensionID + `","name":"Stagehand Runtime","version":"1.2.0","path":"/stagehand","enabled":true}]}`)
 			case "Target.getTargets":
-				result = json.RawMessage(`{"targetInfos":[{"targetId":"worker","url":"` + stagehandWorkerURL + `","type":"service_worker"},{"targetId":"primary","type":"page"}]}`)
+				response["result"] = json.RawMessage(`{"targetInfos":[{"targetId":"worker","url":"` + stagehandWorkerURL + `","type":"service_worker"},{"targetId":"primary","type":"page"}]}`)
+				if !sdkConnection && fixture.missingWorker.Swap(false) {
+					response["result"] = json.RawMessage(`{"targetInfos":[]}`)
+				}
 			case "Runtime.getIsolateId":
 				isolate := "original-isolate"
-				if stops.Load() != 0 {
+				if fixture.stops.Load() != 0 {
 					isolate = "replacement-isolate"
 				}
 				// The replacement can reuse the original CDP target ID.
-				result = json.RawMessage(`{"id":"` + isolate + `"}`)
+				response["result"] = json.RawMessage(`{"id":"` + isolate + `"}`)
 			case "Target.attachToTarget":
-				result = json.RawMessage(`{"sessionId":"worker-session"}`)
+				response["result"] = json.RawMessage(`{"sessionId":"worker-session"}`)
 			case "Target.closeTarget":
 				assert.Equal(t, "worker", request.Params.TargetID)
-				stops.Add(1)
-				result = json.RawMessage(`{"success":true}`)
+				fixture.stops.Add(1)
+				response["result"] = json.RawMessage(`{"success":true}`)
 			case "Runtime.enable", "Runtime.addBinding":
 			case "Runtime.evaluate":
 				if strings.Contains(request.Params.Expression, "__stagehand_runtime") {
-					result = json.RawMessage(`{"result":{"value":{"hasReceiver":true,"marker":{"protocolVersion":"3.0.0","serverInfo":{"name":"stagehand","version":"1.2.0"}}}}}`)
+					response["result"] = json.RawMessage(`{"result":{"value":{"hasReceiver":true,"marker":{"protocolVersion":"3.0.0","serverInfo":{"name":"stagehand","version":"1.2.0"}}}}}`)
 					break
 				}
-				if !replyToStagehandRPC(fixture, t, socket, request.Session, request.Params.Expression, &disconnect, &inits, &stops) {
+				if strings.Contains(request.Params.Expression, `\"method\":\"stagehand.init\"`) && fixture.lostAttachment.Swap(false) {
+					delete(response, "result")
+					response["error"] = &cdpError{
+						Code:    -32001,
+						Message: "Session with given id not found",
+					}
+					break
+				}
+				if !fixture.reply(ctx, t, socket, request.Session, request.Params.Expression, &pendingSnapshot) {
 					return
 				}
-				result = json.RawMessage(`{"result":{"value":true}}`)
+				response["result"] = json.RawMessage(`{"result":{"value":true}}`)
 			default:
 				t.Errorf("unexpected CDP method %s", request.Method)
 				return
 			}
-			if !assert.NoError(t, wsjson.Write(fixture, socket, map[string]any{
-				"id":     request.ID,
-				"result": result,
-			})) {
+			if !assert.NoError(t, wsjson.Write(ctx, socket, response)) {
 				return
 			}
 		}
 	}))
-	defer func() {
+	t.Cleanup(func() {
 		stopFixture()
 		chromium.Close()
-	}()
+	})
 	browser := &Browser{
 		endpoint: "ws" + strings.TrimPrefix(chromium.URL, "http"),
 		primary:  "primary",
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	defer func() {
-		assert.NoError(t, browser.Close(ctx))
-	}()
-	command := browserapi.Command{
-		Operation: "snapshot",
-	}
-	before, err := browser.command(ctx, command)
-	require.NoError(t, err)
-	disconnect.Store(true)
-	_, err = browser.command(ctx, command)
-	require.ErrorIs(t, err, stagehand.ErrCDPConnectionClosed)
-	require.EqualValues(t, 1, inits.Load())
-	require.Zero(t, stops.Load())
-	after, err := browser.command(ctx, command)
-	require.NoError(t, err)
-	require.Equal(t, before, after)
-	require.EqualValues(t, 2, inits.Load())
-	require.EqualValues(t, 1, stops.Load())
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
+		defer cancel()
+		assert.NoError(t, browser.Close(cleanup))
+	})
+	return browser
 }
 
-func replyToStagehandRPC(
+func (fixture *stagehandTestFixture) reply(
 	ctx context.Context,
 	t *testing.T,
 	socket *websocket.Conn,
 	session, expression string,
-	disconnect *atomic.Bool,
-	inits, stops *atomic.Int32,
+	pendingSnapshot *uint64,
 ) bool {
 	t.Helper()
 	encoded := strings.TrimSuffix(strings.TrimPrefix(expression, "void globalThis.__stagehandReceiveFromHost("), "); true")
@@ -138,25 +218,41 @@ func replyToStagehandRPC(
 	var result json.RawMessage
 	switch request.Method {
 	case "stagehand.init":
-		assert.Equal(t, inits.Load(), stops.Load(), "the original worker must stop before reinitializing")
-		inits.Add(1)
+		assert.Equal(t, fixture.inits.Load(), fixture.stops.Load(), "the original worker must stop before reinitializing")
+		fixture.inits.Add(1)
 		result = json.RawMessage(`{"initialized":true,"pages":[]}`)
 	case "context.pages":
 		result = json.RawMessage(`[{"page_id":"primary"}]`)
 	case "page.snapshot":
-		if disconnect.Swap(false) {
+		if fixture.disconnect.Swap(false) {
 			return false
 		}
 		result = json.RawMessage(`{"formatted_tree":"fixture","url_map":{},"xpath_map":{}}`)
+		if fixture.snapshotWaiting != nil && fixture.stops.Load() == 0 {
+			if *pendingSnapshot == 0 {
+				// The first call receives its CDP acknowledgment immediately.
+				// Withhold its RPC reply until a second call is in flight.
+				*pendingSnapshot = request.ID
+				close(fixture.snapshotWaiting)
+				return true
+			}
+			replyStagehandRPC(ctx, t, socket, session, *pendingSnapshot, result)
+			return false
+		}
 	case "stagehand.close":
 		result = json.RawMessage(`{"closed":true}`)
 	default:
 		t.Errorf("unexpected Stagehand method %s", request.Method)
 		return false
 	}
+	return replyStagehandRPC(ctx, t, socket, session, request.ID, result)
+}
+
+func replyStagehandRPC(ctx context.Context, t *testing.T, socket *websocket.Conn, session string, id uint64, result json.RawMessage) bool {
+	t.Helper()
 	data, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
-		"id":      request.ID,
+		"id":      id,
 		"result":  result,
 	})
 	if !assert.NoError(t, err) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	stagehand "github.com/browserbase/stagehand/packages/sdk-go/v4"
@@ -13,6 +14,7 @@ import (
 const StagehandExtensionID = "mibgiokgnjiohdeccdpmccjlfpdoliim"
 
 const stagehandWorkerURL = "chrome-extension://" + StagehandExtensionID + "/service-worker.js"
+const stagehandWorkerPollInterval = 50 * time.Millisecond
 
 type stagehandSession struct {
 	client *stagehand.Stagehand
@@ -41,6 +43,26 @@ func (b *Browser) stagehandForCommand(ctx context.Context) (*stagehandSession, e
 		}
 		b.staleWorker = stagehandWorker{}
 	}
+	ticker := time.NewTicker(stagehandWorkerPollInterval)
+	defer ticker.Stop()
+	for {
+		session, err := b.initializeStagehand(ctx)
+		if err == nil {
+			b.stagehand = session
+			return session, nil
+		}
+		if !stagehandAttachmentLost(err) {
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("reattach to Stagehand worker: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func (b *Browser) initializeStagehand(ctx context.Context) (*stagehandSession, error) {
 	// Acquire the worker on the first typed command so external SDK clients
 	// can still use a fresh guest. A worker RPC rejection releases the claim
 	// but leaves the SDK's browser connection available for another attempt.
@@ -70,31 +92,33 @@ func (b *Browser) stagehandForCommand(ctx context.Context) (*stagehandSession, e
 		defer cancel()
 		return nil, errors.Join(fmt.Errorf("get Stagehand browser context: %w", err), client.Close(cleanup))
 	}
-	b.stagehand = &stagehandSession{
+	return &stagehandSession{
 		client: client,
 		pages:  pages,
 		worker: worker,
-	}
-	return b.stagehand, nil
+	}, nil
 }
 
-func (b *Browser) discardStagehand(ctx context.Context, session *stagehandSession) error {
+func stagehandAttachmentLost(err error) bool {
+	// The pinned SDK keeps CDP protocol errors private. A lost target or
+	// session here means Chromium rejected the call before dispatching it.
+	message := err.Error()
+	return strings.HasSuffix(message, "CDP command failed: Target.attachToTarget: No target with given id found") ||
+		strings.HasSuffix(message, "CDP command failed: Runtime.evaluate: Session with given id not found")
+}
+
+func (b *Browser) discardStagehand(session *stagehandSession) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.stagehand != session {
-		return nil
+		return
 	}
 	// A disconnected SDK cannot release the session in the worker. Retire
-	// that worker before attaching again. Leave the interrupted command with
-	// its original caller because an action may already have run.
+	// that worker before attaching again. The SDK drains buffered RPC replies
+	// before shutting down, allowing other in-flight calls to finish.
 	b.stagehand = nil
 	b.localBrowser = nil
 	b.staleWorker = session.worker
-	err := session.client.Close(ctx)
-	if stagehandDisconnected(err) {
-		return nil
-	}
-	return err
 }
 
 // Close releases the Stagehand client.
@@ -113,14 +137,22 @@ func (b *Browser) stagehandWorker(ctx context.Context) (stagehandWorker, error) 
 		return stagehandWorker{}, err
 	}
 	defer connection.close()
-	worker, err := connection.stagehandWorker(ctx)
-	if err != nil {
-		return stagehandWorker{}, err
+	ticker := time.NewTicker(stagehandWorkerPollInterval)
+	defer ticker.Stop()
+	for {
+		worker, err := connection.stagehandWorker(ctx)
+		if err != nil {
+			return stagehandWorker{}, err
+		}
+		if worker.targetID != "" {
+			return worker, nil
+		}
+		select {
+		case <-ctx.Done():
+			return stagehandWorker{}, fmt.Errorf("wait for Stagehand service worker target: %w", ctx.Err())
+		case <-ticker.C:
+		}
 	}
-	if worker.targetID == "" {
-		return stagehandWorker{}, errors.New("missing Stagehand service worker target")
-	}
-	return worker, nil
 }
 
 func (b *Browser) stopStagehandWorker(ctx context.Context, worker stagehandWorker) error {
@@ -129,7 +161,7 @@ func (b *Browser) stopStagehandWorker(ctx context.Context, worker stagehandWorke
 		return err
 	}
 	defer connection.close()
-	ticker := time.NewTicker(50 * time.Millisecond)
+	ticker := time.NewTicker(stagehandWorkerPollInterval)
 	defer ticker.Stop()
 	for closeRequested := false; ; closeRequested = true {
 		current, err := connection.stagehandWorker(ctx)
