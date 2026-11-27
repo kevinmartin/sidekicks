@@ -7,7 +7,7 @@
   },
   "devDependencies": {
     "@types/chrome": "0.3.7",
-    "devtools-protocol": "0.0.1740066",
+    "devtools-protocol": "0.0.1752859",
     "typescript": "7.0.2"
   }
 }
