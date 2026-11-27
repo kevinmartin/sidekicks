@@ -6,7 +6,7 @@
     "build": "tsc -p tsconfig.json && cp manifest.json dist/manifest.json"
   },
   "devDependencies": {
-    "@types/chrome": "0.3.7",
+    "@types/chrome": "0.3.8",
     "devtools-protocol": "0.0.1740066",
     "typescript": "7.0.2"
   }
